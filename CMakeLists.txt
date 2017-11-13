@@ -43,6 +43,6 @@ set(INCLUDE_DIRS  ${PROJECT_SOURCE_DIR}/include
 include_directories(${INCLUDE_DIRS})
 
 ## Declare the crawl_planner library
-add_library(crawl_planner src/CrawlPlanner.cpp)
+add_library(crawl_planner src/CrawlPlanner.cpp  src/loggingFeatures.cpp)
 target_link_libraries(crawl_planner  ${catkin_LIBRARIES})
 set_target_properties(crawl_planner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3")     

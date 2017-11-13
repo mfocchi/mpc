@@ -118,6 +118,9 @@ protected:
 
     void crawlStateMachine(double time);
 
+    void addVarToCollect( double value, std::string var_name);
+    void updateVarsForDataLogging();
+
     void computeTerrainEstimation();
     void printCharOptions();
     //void changeCrawlParams(); TODO
@@ -133,12 +136,14 @@ protected:
     iit::ROBOT::WholeBodyOptimization::ConstrViolation constr_viol;
     CTerrainEstimator terrainEstimator;
 
+
     //Flags
     bool stopping_crawl = false;
     bool Terrain_Estimation;
     bool hapticCrawl = true;
     bool roughTerrainFlag = false;
 
+    double taskServoTime;
     //crawl variables
     dog::LegID swing_leg_index;
     enum the_states {idle,
