@@ -101,7 +101,7 @@ void CrawlPlanner::starting(double time) {
 
 
     //in the init there is not the state of the robot
-    gl.param_file = ros::package::getPath(std::string("crawl_controller")) + "/config/crawl_options.ini";
+    gl.param_file = ros::package::getPath(std::string("crawl_planner")) + "/config/crawl_options.ini";
 
     //this is stuff that needs the first state to arrive...
     //	// Converting WholeBodyState to RobCoGen
@@ -116,7 +116,7 @@ void CrawlPlanner::starting(double time) {
     bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
     bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
-    bs->setOrientation_W(actual_ws_->getBaseRPY_W());
+    bs->setOrientation_W(actual_ws_->getBaseOrientation_W());
 
     gl.init(q_, qd_, qdd_); //this sets also 	footPosDes = footPos;
     gl.sl_to_eigenLogic(q_, qd_, tau_, qdd_, *bs);
@@ -137,6 +137,7 @@ void CrawlPlanner::starting(double time) {
     linearSpeedY = gl.config_.get<double>("Crawl.linearSpeedY");
     headingSpeed = gl.config_.get<double>("Crawl.headingSpeed");
     gl.cycle_time = gl.config_.get<double>("Crawl.cycle_time");
+    prt(gl.cycle_time)
     update_phase_duration(gl.cycle_time);
     //step handler init
     stepHandler->setHipDefaultYOffset(0.08 + fabs((gl.footPos[dog::LF] - stepHandler->getHipPosition(dog::LF))(rbd::Y)));
@@ -158,6 +159,7 @@ void CrawlPlanner::starting(double time) {
     gl.des_height = gl.actual_CoM_height;
     initial_height = gl.actual_CoM_height;
     gl.frame_change = true;
+    gl.terr_normal = Vector3d(0,0,1.0);
 
     prt(mySchedule->getCurrentSwing())
     printf("finished starting\n");
@@ -179,12 +181,13 @@ void CrawlPlanner::run(double time,
         tau_(i) = actual_ws_->joint_eff(joint_id);
     }
 
+    updateVarsForDataLogging();
 
     bs->setPosition_W(actual_ws_->getBasePosition_W());
     bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
     bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
-    bs->setOrientation_W(actual_ws_->getBaseRPY_W());
+    bs->setOrientation_W(actual_ws_->getBaseOrientation_W());
 
     gl.sl_to_eigenLogic(q_, qd_, tau_, qdd_, *bs);
     //com identification
@@ -205,6 +208,7 @@ void CrawlPlanner::run(double time,
     //fills in the base and joints variables
     crawlStateMachine(time);
 
+    gl.computeIK(gl.footPosDes, gl.footVelDes, des_q_, des_qd_);
 
 
     // Converting RobCoGen to WholeBodyState
@@ -217,12 +221,12 @@ void CrawlPlanner::run(double time,
         //no torques are sent
         planned_ws_.setJointEffort(0., joint_id);
     }
-    //send the des_base_state
+    //send the des_base_state (first do the orientation part)
     planned_ws_.setBaseRPY_W(gl.des_base_orient.x);
     planned_ws_.setBasePosition_W(gl.des_base_pos.x);
-    planned_ws_.setBaseRPYVelocity(gl.des_base_orient.xd);
+    planned_ws_.setBaseRPYVelocity_W(gl.des_base_orient.xd);
     planned_ws_.setBaseVelocity_W(gl.des_base_pos.xd);
-    planned_ws_.setBaseRPYAcceleration(gl.des_base_orient.xdd);
+    planned_ws_.setBaseRPYAcceleration_W(gl.des_base_orient.xdd);
     planned_ws_.setBaseAcceleration_W(gl.des_base_pos.xdd);
 
     //send the desired foot positions
@@ -259,6 +263,7 @@ void CrawlPlanner::kill() {
 
 void CrawlPlanner::crawlStateMachine(double time)
 {
+    taskServoTime = time;
     switch (state_machine) {
     for (int leg=dog::LF; leg<=dog::RH; leg++)
     {
@@ -276,6 +281,10 @@ void CrawlPlanner::crawlStateMachine(double time)
 	            //get coord of bary in world frame
 	            Matrix3d Rdes = commons::rpyToRot(gl.des_base_orient.x);
 	            bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal, stab_margin, new_triangle_baryW);
+	            prt(gl.terr_normal)
+	            prt(gl.R)
+	            prt(gl.footPos)
+	            prt(new_triangle_baryW)
 	            //for plotting purposes
 	            BaryTriangleW= gl.actual_base.x + new_triangle_baryW;
 	            gl.dummy_var1 = gl.actual_base.x +bodyTargetHandler->getDummyVar();
@@ -344,7 +353,6 @@ void CrawlPlanner::crawlStateMachine(double time)
         //in the dynamics casecause I set the swing leg on but I compute the
         //reference for swing only the next iteration
         gl.swingFootRef[swing_leg_index].x = gl.footPosDes[swing_leg_index];
-        gl.computeIK(gl.footPosDes,zero_vel, des_q_, des_qd_);
         gl.swingFootRef[swing_leg_index].xd.setZero();//set velocity to zero
         gl.swingFootRef[swing_leg_index].xdd.setZero();
     }
@@ -470,8 +478,6 @@ bool  CrawlPlanner::update_base_position(double time){
 
         //in alternatuive
         //gl.bodySpliner->updateFeetPoint(gl.des_base_pos.xd,gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
-
-        gl.computeIK(gl.footPosDes, gl.footVelDes, des_q_, des_qd_);
         return false; //base is moving
     } else {
         baseTimer.resetTimer(); //reset timer for next state
@@ -497,7 +503,6 @@ void  CrawlPlanner::update_leg_correction(dog::LegID swing_leg_index, double tim
     footSpliner[swing_leg_index].getPoint(time, gl.swingFootRef[swing_leg_index]);
     gl.footPosDes[swing_leg_index] = gl.swingFootRef[swing_leg_index].x;
     gl.footVelDes[swing_leg_index] = gl.swingFootRef[swing_leg_index].xd;
-    gl.computeIK(gl.footPosDes, gl.footVelDes, des_q_, des_qd_);
 }
 
 bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double time)
@@ -527,7 +532,7 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
         swingTimer.resetTimer();
         return true;
     } else{
-        gl.computeIK(gl.footPosDes,gl.footVelDes, des_q_, des_qd_);//TODO check ws limits
+
     }
     return false;
 }
@@ -553,6 +558,13 @@ void CrawlPlanner::start_crawl(void)
         state_machine = move_base_to_next_support_triangle;
         //prt(mySchedule->getCurrentSwing())
         std::cout<<"Crawl started"<<std::endl;
+
+        bs->setPosition_W(actual_ws_->getBasePosition_W());
+        bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
+        bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
+        bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
+        bs->setOrientation_W(actual_ws_->getBaseOrientation_W());
+        gl.footPosDes = sample_footPosDes = gl.footPos;
     }
 }
 //TODO implement client server to strt trunk contr
