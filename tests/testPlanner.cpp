@@ -21,20 +21,22 @@ double height = 0.5;
 double Ts = 0.1;
 Vector3d  initial_state = Vector3d(0.1,-0.1,0.0);
 
-VectorXd zmp_x, zmp_y;
+VectorXd zmp_x, zmp_y, com_x, com_y;
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 
 //myPlanner.debug();
-myPlanner.buildZMPMatrix(height);
+
 
 //input
 VectorXd  jerk;
 jerk.resize(horizon_size);
 //jerk.setConstant(2.0);
-jerk<< 1 , 2, 3,4,1 ,1,1,1,1,1;
+jerk<< 1 , 5, 3,4,1 ,1,1,1,1,1;
 
 myPlanner.computeZMPtrajectory(initial_state, jerk, zmp_x, zmp_y);
 prt(zmp_x.transpose())
+myPlanner.computeCoMtrajectory(initial_state, jerk, com_x, com_y,MPCPlanner::POSITION);
+prt(com_x.transpose())
 
 //myPlanner.saveTraj("zmpx.txt", zmp_x);
 //from matlab

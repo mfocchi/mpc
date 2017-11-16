@@ -20,6 +20,7 @@ class MPCPlanner
 {
 
     public:
+        enum state_type{POSITION=0, VELOCITY, ACCELERATION};
         MPCPlanner(const double horizon_size, const double Ts, const double gravity);
         ~MPCPlanner();
 
@@ -29,8 +30,9 @@ class MPCPlanner
         void saveTraj(const std::string finename, const Eigen::VectorXd & zmp);
 
         void computeZMPtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk, Eigen::VectorXd & zmp_x, Eigen::VectorXd &zmp_y);
-        void computeCoMtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk, Eigen::VectorXd & com_x, Eigen::VectorXd &com_y);
-        void buildZMPMatrix(const double height);
+        void computeCoMtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk,
+                                    Eigen::VectorXd & traj_x, Eigen::VectorXd &traj_y, const state_type state = POSITION);
+        void buildMatrix(const Eigen::Matrix<double, 1,3> C_in, Eigen::MatrixXd & state_matrix, Eigen::MatrixXd & input_matrix);
         void solveQP(const Eigen::Vector3d & initial_state,const  Eigen::VectorXd & zmp_ref,  Eigen::VectorXd & jerk_vector);
 
     private:
@@ -45,8 +47,11 @@ class MPCPlanner
         double weight_R, weight_Q;
         Eigen::Matrix<double,3,3> A;
         Eigen::Matrix<double,3,1> B;
-        Eigen::Matrix<double,1,3> C;
-        Eigen::MatrixXd Px, Pu, Xx, Xu;
+        Eigen::Matrix<double,1,3> Cz;
+        Eigen::Matrix<double,1,3> Cx;
+        Eigen::Matrix<double,1,3> Cv;
+        Eigen::Matrix<double,1,3> Ca;
+        Eigen::MatrixXd Zx, Zu, Xpx, Xpu, Xvx, Xvu, Xax, Xau;
         double gravity_,height_;
 };
 
