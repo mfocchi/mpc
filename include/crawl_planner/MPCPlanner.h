@@ -29,11 +29,20 @@ class MPCPlanner
 
         void saveTraj(const std::string finename, const Eigen::VectorXd & zmp);
 
-        void computeZMPtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk, Eigen::VectorXd & zmp_x, Eigen::VectorXd &zmp_y);
-        void computeCoMtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk,
-                                    Eigen::VectorXd & traj_x, Eigen::VectorXd &traj_y, const state_type state = POSITION);
+        void computeZMPtrajectory(const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
+                                 const Eigen::VectorXd & jerk_x, const Eigen::VectorXd & jerk_y,
+                                 Eigen::VectorXd & zmp_x, Eigen::VectorXd &zmp_y);
+        void computeZMPtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk, Eigen::VectorXd & zmp);
+
+        void computeCOMtrajectory(const Eigen::Vector3d & initial_state_,
+                                  const Eigen::VectorXd & jerk,
+                                  Eigen::VectorXd & traj,
+                                  const state_type state = POSITION);
+        void computeCOMtrajectory( const Eigen::Vector3d & initial_state_x,  const Eigen::Vector3d & initial_state_y,
+                                   const Eigen::VectorXd & jerk_x, const Eigen::VectorXd & jerk_y,
+                                   Eigen::VectorXd & traj_x, Eigen::VectorXd &traj_y, const state_type state = POSITION);
         void buildMatrix(const Eigen::Matrix<double, 1,3> C_in, Eigen::MatrixXd & state_matrix, Eigen::MatrixXd & input_matrix);
-        void solveQP(const Eigen::Vector3d & initial_state,const  Eigen::VectorXd & zmp_ref,  Eigen::VectorXd & jerk_vector);
+        void solveQP(const double actual_height, const Eigen::Vector3d & initial_state,const  Eigen::VectorXd & zmp_ref,  Eigen::VectorXd & jerk_vector);
 
     private:
 

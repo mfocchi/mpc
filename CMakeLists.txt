@@ -19,6 +19,7 @@ catkin_package(
   DEPENDS system_lib
 )
 
+set(CMAKE_BUILD_TYPE Debug)
 #just set robot name here
 set(ROBOT_NAME "HyQ") 
 #this is to find robot.h for liblocomotionutils
@@ -43,6 +44,16 @@ set(INCLUDE_DIRS  ${PROJECT_SOURCE_DIR}/include
 include_directories(${INCLUDE_DIRS})
 
 ## Declare the crawl_planner library
-add_library(crawl_planner src/CrawlPlanner.cpp  src/loggingFeatures.cpp)
+add_library(crawl_planner src/CrawlPlanner.cpp  src/loggingFeatures.cpp src/MPCPlanner.cpp)
 target_link_libraries(crawl_planner  ${catkin_LIBRARIES})
 set_target_properties(crawl_planner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3")     
+
+
+
+add_executable(testPlanner tests/testPlanner.cpp src/MPCPlanner.cpp)
+target_link_libraries(testPlanner   ${catkin_LIBRARIES})
+set_target_properties(testPlanner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
+add_executable(testPlannerXY tests/testPlannerXY.cpp src/MPCPlanner.cpp)
+target_link_libraries(testPlannerXY   ${catkin_LIBRARIES})
+set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")

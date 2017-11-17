@@ -59,8 +59,9 @@ MPCPlanner::~MPCPlanner()
 }
 
 void MPCPlanner::setWeights(double weight_R, double weight_Q){
-    weight_R = weight_R;
-    weight_Q = weight_Q;
+    this->weight_R = weight_R;
+    this->weight_Q = weight_Q;
+
 }
 
 void MPCPlanner::buildMatrix(const Matrix<double, 1,3> C_in, MatrixXd & state_matrix, MatrixXd & input_matrix)
@@ -108,36 +109,50 @@ void MPCPlanner::buildMatrix(const Matrix<double, 1,3> C_in, MatrixXd & state_ma
 
 //this is the zmp in the next state k+1 with respect to u
 //the input u applyes immediately at step k as the initial state but has an influence on k+1
-void  MPCPlanner::computeZMPtrajectory(const Vector3d & initial_state, const VectorXd & jerk, VectorXd & zmp_x, VectorXd &zmp_y)
+void  MPCPlanner::computeZMPtrajectory(const Vector3d & initial_state_x, const Vector3d & initial_state_y,
+                                       const VectorXd & jerk_x, const VectorXd & jerk_y,
+                                       VectorXd & zmp_x, VectorXd &zmp_y)
 {
-    zmp_x.resize(horizon_size_);
-    zmp_y.resize(horizon_size_);
-    buildMatrix(Cz,Zx,Zu);
-    zmp_x = Zx*initial_state + Zu*jerk;
-
+    computeZMPtrajectory(initial_state_x, jerk_x, zmp_x);
+    computeZMPtrajectory(initial_state_y, jerk_y, zmp_y);
 }
 
-void MPCPlanner::computeCoMtrajectory( const Vector3d & initial_state, const VectorXd & jerk, VectorXd & traj_x, VectorXd &traj_y, const state_type state)
+void  MPCPlanner::computeZMPtrajectory(const Vector3d & initial_state, const VectorXd & jerk, VectorXd & zmp)
 {
-    traj_x.resize(horizon_size_);
-     traj_y.resize(horizon_size_);
+    zmp.resize(horizon_size_);
+    buildMatrix(Cz,Zx,Zu);
+    zmp = Zx*initial_state + Zu*jerk;
+}
+
+
+void MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state_x,  const Vector3d & initial_state_y,
+                                       const VectorXd & jerk_x, const VectorXd & jerk_y,
+                                       VectorXd & traj_x, VectorXd &traj_y, const state_type state)
+{
+    computeCOMtrajectory(initial_state_x, jerk_x, traj_x, state);
+    computeCOMtrajectory(initial_state_y, jerk_y, traj_y, state);
+}
+
+void MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state, const VectorXd & jerk, VectorXd & traj, const state_type state)
+{
+    traj.resize(horizon_size_);
 
     switch(state)
     {
         case POSITION:
             buildMatrix(Cx,Xpx,Xpu);
-            traj_x = Xpx*initial_state + Xpu*jerk;
-            traj_y = Xpx*initial_state + Xpu*jerk;
+            traj = Xpx*initial_state + Xpu*jerk;
+
         break;
         case VELOCITY:
             buildMatrix(Cv,Xvx,Xvu);
-            traj_x = Xvx*initial_state + Xvu*jerk;
-            traj_y = Xvx*initial_state + Xvu*jerk;
+            traj = Xvx*initial_state + Xvu*jerk;
+
         break;
         case ACCELERATION:
             buildMatrix(Ca,Xax,Xau);
-            traj_x = Xax*initial_state + Xau*jerk;
-            traj_y = Xax*initial_state + Xau*jerk;
+            traj = Xax*initial_state + Xau*jerk;
+
         break;
         default:
             break;
@@ -145,11 +160,16 @@ void MPCPlanner::computeCoMtrajectory( const Vector3d & initial_state, const Vec
 
 }
 
-void MPCPlanner::solveQP(const Vector3d & initial_state,const  VectorXd & zmp_ref,  VectorXd & jerk_vector)
+
+void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_state,const  VectorXd & zmp_ref,  VectorXd & jerk_vector)
 {
+    this->height_ = actual_height;
     //build matrix
     MatrixXd G;G.resize(horizon_size_,horizon_size_);
     VectorXd b;b.resize(horizon_size_,1);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
     G = Zu.transpose()*Zu + weight_R/weight_Q*MatrixXd::Identity(horizon_size_,horizon_size_);
     b = Zu.transpose()*(Zx*initial_state - zmp_ref);
     jerk_vector = -G.inverse()*b;
