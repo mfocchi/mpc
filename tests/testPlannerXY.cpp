@@ -21,6 +21,7 @@ int main()
 int horizon_size = 100;//10 default for tests
 int number_of_steps = 5;
 double distance = 1.0;
+double distance_per_step = floor(horizon_size/number_of_steps);
 double lateral_sway = 0.5;
 int step_knots = floor(horizon_size/number_of_steps);
 double height = 0.5;
@@ -32,6 +33,7 @@ VectorXd  jerk_x, jerk_y;
 Vector3d  initial_state_x = Vector3d(0.0,-0.0,0.0);
 Vector3d  initial_state_y = Vector3d(0.0,0.0,0.0);
 VectorXd zmp_x, zmp_y, com_x, com_y;
+
 
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
@@ -55,7 +57,7 @@ zmpRef_x.setLinSpaced(horizon_size,0,distance);
 zmpRef_y.resize(horizon_size);
 stepline.setLinSpaced(step_knots/2,0,lateral_sway);//take first half  step to left
 zmpRef_y.segment(0,step_knots/2) = stepline;
-int knot_index =step_knots/2;
+int step_index =step_knots/2;
 bool goleft = false;
 for (int i=0; i<number_of_steps-1;i++)
 {
@@ -65,12 +67,12 @@ for (int i=0; i<number_of_steps-1;i++)
     } else{
         stepline.setLinSpaced(step_knots,lateral_sway,-lateral_sway);
     }
-    zmpRef_y.segment(knot_index,step_knots) = stepline;
+    zmpRef_y.segment(step_index,step_knots) = stepline;
     goleft = !goleft;
-    knot_index += step_knots;
+    step_index += step_knots;
 }
 //compute missing knots (last step can be faster)
-double missing_knots = horizon_size - knot_index;
+double missing_knots = horizon_size - step_index;
 //set the last half motion step
 if (goleft)
 {
@@ -78,7 +80,7 @@ if (goleft)
 } else{
     stepline.setLinSpaced(missing_knots,lateral_sway,0);
 }
-zmpRef_y.segment(knot_index,missing_knots) = stepline;
+zmpRef_y.segment(step_index,missing_knots) = stepline;
 
 //solve the QPs independently
 myPlanner.solveQP(height, initial_state_x , zmpRef_x,jerk_x);
@@ -96,5 +98,7 @@ myPlanner.saveTraj("zmp_x.txt", zmp_x);
 myPlanner.saveTraj("zmp_y.txt", zmp_y);
 myPlanner.saveTraj("com_x.txt", com_x);
 myPlanner.saveTraj("com_y.txt", com_y);
+
+
 
 }

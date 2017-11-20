@@ -56,4 +56,6 @@ set_target_properties(testPlanner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNT
 
 add_executable(testPlannerXY tests/testPlannerXY.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXY   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")add_executable(testPlannerXYconstraint tests/testPlannerXYconstraint.cpp src/MPCPlanner.cpp)
+target_link_libraries(testPlannerXYconstraint   ${catkin_LIBRARIES})
+set_target_properties(testPlannerXYconstraint PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")

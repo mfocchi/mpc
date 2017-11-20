@@ -58,6 +58,22 @@ MPCPlanner::~MPCPlanner()
 
 }
 
+void MPCPlanner::setHorizonSize(int horizon_size_)
+{
+    this->horizon_size_= horizon_size_;
+    this->Zu.resize(horizon_size_, horizon_size_);
+    this->Zx.resize(horizon_size_, 3);
+
+    this->Xpu.resize(horizon_size_, horizon_size_);
+    this->Xpx.resize(horizon_size_, 3);
+
+    this->Xvu.resize(horizon_size_, horizon_size_);
+    this->Xvx.resize(horizon_size_, 3);
+
+    this->Xau.resize(horizon_size_, horizon_size_);
+    this->Xax.resize(horizon_size_, 3);
+}
+
 void MPCPlanner::setWeights(double weight_R, double weight_Q){
     this->weight_R = weight_R;
     this->weight_Q = weight_Q;
@@ -167,6 +183,7 @@ void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_st
     //build matrix
     MatrixXd G;G.resize(horizon_size_,horizon_size_);
     VectorXd b;b.resize(horizon_size_,1);
+    jerk_vector.resize(horizon_size_);
     //update with height
     Cz << 1 , 0  , -height_/gravity_;
     buildMatrix(Cz,Zx,Zu);
@@ -176,25 +193,88 @@ void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_st
 
 }
 
+void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
+{
+    this->height_ = actual_height;
+
+    Eigen::MatrixXd GQ, CI, CE; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0;
+    //build matrix
+    GQ.resize(horizon_size_,horizon_size_);
+    g0.resize(horizon_size_,1); g0.setZero();
+    CI.resize(2*horizon_size_,horizon_size_); //max /min for all horizon
+    ci0.resize(2*horizon_size_);
+    jerk_vector.resize(horizon_size_);
+
+    //Finds x that minimizes xddd^T * Q * xddd
+    GQ.setIdentity(); GQ*=weight_Q;
 
 
-void MPCPlanner::saveTraj(const std::string finename, const VectorXd & zmp)
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //inequality 2*N min <zmp < max
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+    //first N min constraint -- zmp  >= min => zmp - min >0 => Z_x x0 + Zu *xddd - min >0 =>   Zu *xddd + (Z_x*x0  - min) >0
+    CI.block(0, 0, horizon_size_,horizon_size_) = Zu;
+    ci0.segment(0,horizon_size_) = Zx*initial_state - zmpLim.min;
+    //N max constraint -- zmp  <= max => -zmp > -max => -zmp + max >0 => -Z_x x0 - Zu *xddd +max >0 => - Zu *xddd  + (max -Z_x x0)    >0
+    CI.block(horizon_size_, 0, horizon_size_,horizon_size_) = -Zu;
+    ci0.segment(horizon_size_,horizon_size_) = zmpLim.max-Zx*initial_state;
+
+//
+//    prt(GQ)
+//    prt(CI)
+//    prt(ci0.transpose())
+
+//    min 0.5 * x G x + g0 x
+//    s.t.
+//        CE^T x + ce0 = 0
+//        CI^T x + ci0 >= 0
+//
+//     The matrix and vectors dimensions are as follows:
+//         G: n * n
+//            g0: n
+//
+//            CE: n * p
+//         ce0: p
+//
+//          CI: n * m
+//       ci0: m
+//
+//         x: n
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, jerk_vector);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+
+}
+
+
+
+void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var)
 {
     double time = 0.0;
-    std::ofstream file;
-    file.open(finename);
-    for (int i=0; i<horizon_size_;i++)
+
+    if (var.size() == horizon_size_)
     {
-        file<<time <<" ";
-        file<< zmp(i) <<" ";
-        file <<  std::endl;
-        time+=Ts;
+        std::ofstream file;
+        file.open(finename.c_str());
+
+        for (int i=0; i<horizon_size_;i++)
+        {
+            file<<time <<" ";
+            file<< var(i) <<" ";
+            file <<  std::endl;
+            time+=Ts;
+        }
+        printf("done saving\n");
+        file.close();
+    } else {
+        std::cout<< "var has not been filled in"<<std::endl;
     }
-
-
-    printf("done saving\n");
-    file.close();
-
 }
 
 

@@ -20,6 +20,14 @@ class MPCPlanner
 {
 
     public:
+
+    struct BoxLimits{
+            Eigen::VectorXd max;
+            Eigen::VectorXd min;
+            void resize(double size) { max.resize(size);
+                                       min.resize(size); }
+    };
+
         enum state_type{POSITION=0, VELOCITY, ACCELERATION};
         MPCPlanner(const double horizon_size, const double Ts, const double gravity);
         ~MPCPlanner();
@@ -43,7 +51,9 @@ class MPCPlanner
                                    Eigen::VectorXd & traj_x, Eigen::VectorXd &traj_y, const state_type state = POSITION);
         void buildMatrix(const Eigen::Matrix<double, 1,3> C_in, Eigen::MatrixXd & state_matrix, Eigen::MatrixXd & input_matrix);
         void solveQP(const double actual_height, const Eigen::Vector3d & initial_state,const  Eigen::VectorXd & zmp_ref,  Eigen::VectorXd & jerk_vector);
+        void solveQPconstraint(const double actual_height, const Eigen::Vector3d & initial_state,const  BoxLimits & zmpLim,  Eigen::VectorXd & jerk_vector);
 
+        void setHorizonSize(int horizon);
     private:
 
 
