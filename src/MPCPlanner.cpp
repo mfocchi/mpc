@@ -193,7 +193,16 @@ void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_st
 
 }
 
-void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
+void MPCPlanner::solveQPconstraint(const double weight_R, const double weight_Q, const double actual_height,
+                                   const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector, bool robustnessFlag)
+{
+    this->weight_R = weight_R;
+    this->weight_Q = weight_Q;
+
+    solveQPconstraint(actual_height, initial_state, zmpLim,  jerk_vector, robustnessFlag);
+}
+
+void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector, bool robustnessFlag)
 {
     this->height_ = actual_height;
 
@@ -201,22 +210,29 @@ void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & 
     Eigen::VectorXd g0, ce0, ci0;
     //build matrix
     GQ.resize(horizon_size_,horizon_size_);
-    g0.resize(horizon_size_,1); g0.setZero();
+    g0.resize(horizon_size_,1);
     CI.resize(2*horizon_size_,horizon_size_); //max /min for all horizon
     ci0.resize(2*horizon_size_);
     jerk_vector.resize(horizon_size_);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
 
-    //Finds x that minimizes xddd^T * Q * xddd
-    GQ.setIdentity(); GQ*=weight_Q;
-
+    if (!robustnessFlag){
+        //Finds x that minimizes xddd^T * Q * xddd
+        GQ.setIdentity(); GQ*=weight_Q;
+        g0.setZero();
+    } else {
+        //include the maximization of distance in the cost function
+        GQ = (weight_R/weight_Q*MatrixXd::Identity(horizon_size_,horizon_size_) - Zu.transpose()*Zu - Zu.transpose()*Zu);
+        g0 = -(Zx*initial_state - zmpLim.min).transpose()*Zu -(Zx*initial_state - zmpLim.max).transpose()*Zu;
+    }
 
     //no equality constraints
     CE.resize(0,0);ce0.resize(0);
 
     //inequality 2*N min <zmp < max
-    //update with height
-    Cz << 1 , 0  , -height_/gravity_;
-    buildMatrix(Cz,Zx,Zu);
+
 
     //first N min constraint -- zmp  >= min => zmp - min >0 => Z_x x0 + Zu *xddd - min >0 =>   Zu *xddd + (Z_x*x0  - min) >0
     CI.block(0, 0, horizon_size_,horizon_size_) = Zu;
