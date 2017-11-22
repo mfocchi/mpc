@@ -193,16 +193,8 @@ void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_st
 
 }
 
-void MPCPlanner::solveQPconstraint(const double weight_R, const double weight_Q, const double actual_height,
-                                   const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector, bool robustnessFlag)
-{
-    this->weight_R = weight_R;
-    this->weight_Q = weight_Q;
 
-    solveQPconstraint(actual_height, initial_state, zmpLim,  jerk_vector, robustnessFlag);
-}
-
-void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector, bool robustnessFlag)
+void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
 {
     this->height_ = actual_height;
 
@@ -218,15 +210,11 @@ void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & 
     Cz << 1 , 0  , -height_/gravity_;
     buildMatrix(Cz,Zx,Zu);
 
-    if (!robustnessFlag){
-        //Finds x that minimizes xddd^T * Q * xddd
-        GQ.setIdentity(); GQ*=weight_Q;
-        g0.setZero();
-    } else {
-        //include the maximization of distance in the cost function
-        GQ = (weight_R/weight_Q*MatrixXd::Identity(horizon_size_,horizon_size_) - Zu.transpose()*Zu - Zu.transpose()*Zu);
-        g0 = -(Zx*initial_state - zmpLim.min).transpose()*Zu -(Zx*initial_state - zmpLim.max).transpose()*Zu;
-    }
+
+    //Finds x that minimizes xddd^T * Q * xddd
+    GQ.setIdentity(); GQ*=weight_Q;
+    g0.setZero();
+
 
     //no equality constraints
     CE.resize(0,0);ce0.resize(0);
@@ -267,6 +255,85 @@ void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & 
         {cout<<"couldn't find a feasible solution"<<endl;}
 
 }
+
+
+void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
+{
+    this->height_ = actual_height;
+
+    Eigen::MatrixXd GQ, CI, CE; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0, solution;
+    //build matrix
+    //we have both jerk and slack vars as
+    GQ.resize(2*horizon_size_,2*horizon_size_);
+    g0.resize(2*horizon_size_,1);g0.setZero();
+    CI.resize(3*horizon_size_,2*horizon_size_); CI.setZero();//max /min for all horizon
+    ci0.resize(3*horizon_size_);
+    jerk_vector.resize(horizon_size_);
+    solution.resize(2*horizon_size_);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+    //GQ shoud be positive definite
+    GQ.setIdentity();
+    GQ.block(0,0, horizon_size_,horizon_size_)*=weight_R; //jerk part
+    GQ.block(horizon_size_,horizon_size_, horizon_size_,horizon_size_)*=weight_Q; //slack part
+
+    //the lienar part comes from slacks   ones(1000)^T*Q*w
+    g0.segment(horizon_size_,horizon_size_).setConstant(1000*weight_Q);
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //A*x+b + w >=0 / w<0 for robustness
+    //inequality (2*N) min <zmp < max
+
+    //first N min constraint -- zmp  >= min => zmp - min + w > 0  => Z_x x0 + Zu *xddd - min + w>0 =>   Zu *xddd + (Z_x*x0  - min) + w  >0
+    // [Zu | Inxn] *[xddd/w]  + (Z_x*x0  - min) >0
+    CI.block(0, 0, horizon_size_,horizon_size_) = Zu;
+    CI.block(0, horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
+    ci0.segment(0,horizon_size_) = Zx*initial_state - zmpLim.min;
+    //N max constraint -- zmp  <= max => -zmp > -max => -zmp + max + w>0 => -Z_x x0 - Zu *xddd +max + w>0 => - Zu *xddd  + (max -Z_x x0)  +w >0
+    //[-Zu | Inxn] *[xddd/w]   + (max -Z_x x0)    >0
+    CI.block(horizon_size_, 0, horizon_size_,horizon_size_) = -Zu;
+    CI.block(horizon_size_, horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
+    ci0.segment(horizon_size_,horizon_size_) = zmpLim.max-Zx*initial_state;
+
+    //inequality (1*N) w<=0 => -w>0
+    CI.block(2*horizon_size_, horizon_size_, horizon_size_,horizon_size_)= -MatrixXd::Identity(horizon_size_,horizon_size_);
+    ci0.segment(2*horizon_size_,horizon_size_).setZero();
+
+
+//
+//    prt(GQ)
+//    prt(CI)
+//    prt(ci0.transpose())
+
+//    min 0.5 * x G x + g0 x
+//    s.t.
+//        CE^T x + ce0 = 0
+//        CI^T x + ci0 >= 0
+//
+//     The matrix and vectors dimensions are as follows:
+//         G: n * n
+//            g0: n
+//
+//            CE: n * p
+//         ce0: p
+//
+//          CI: n * m
+//       ci0: m
+//
+//         x: n
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+    else {
+        prt(solution.segment(horizon_size_,horizon_size_).transpose()) //slacks
+        jerk_vector = solution.segment(0,horizon_size_);
+    }
+}
+
 
 
 

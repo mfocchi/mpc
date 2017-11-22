@@ -52,10 +52,10 @@ class MPCPlanner
         void buildMatrix(const Eigen::Matrix<double, 1,3> C_in, Eigen::MatrixXd & state_matrix, Eigen::MatrixXd & input_matrix);
         void solveQP(const double actual_height, const Eigen::Vector3d & initial_state,const  Eigen::VectorXd & zmp_ref,  Eigen::VectorXd & jerk_vector);
         void solveQPconstraint(const double actual_height, const Eigen::Vector3d & initial_state,
-                               const  BoxLimits & zmpLim,  Eigen::VectorXd & jerk_vector, bool robustnessFlag = false);
-        void solveQPconstraint(const double weight_R,const double weight_Q, const double actual_height,
-                               const Eigen::Vector3d & initial_state,const  BoxLimits & zmpLim,
-                               Eigen::VectorXd & jerk_vector, bool robustnessFlag = false);
+                               const  BoxLimits & zmpLim,  Eigen::VectorXd & jerk_vector);
+        void solveQPconstraintSlack(const double actual_height, const Eigen::Vector3d & initial_state,
+                                    const  BoxLimits & zmpLim,  Eigen::VectorXd & jerk_vector);
+
 
         void setHorizonSize(int horizon);
     private:

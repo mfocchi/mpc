@@ -22,9 +22,6 @@ int horizon_size = 100;//10 default for tests
 int number_of_steps = 5;
 double distance = 1.0;
 
-double distance_per_step = distance/number_of_steps;
-double lateral_sway = 0.5;
-int step_knots = floor(horizon_size/number_of_steps);
 double height = 0.5;
 double lateral_bound = 0.2;
 double Ts = 0.1;
@@ -46,6 +43,10 @@ newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0))
 newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
 newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
 
+
+double distance_per_step = distance/number_of_steps;
+double lateral_sway = 0.5;
+int step_knots = floor(horizon_size/number_of_steps);
 
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 myPlanner.setWeights(weight_R, weight_Q);
@@ -114,10 +115,19 @@ zmpLimY.min.segment(start_phase_index, missing_knots).setConstant(-1.0);
 //myPlanner.solveQPconstraint(height, initial_state_y , zmpLimY,jerk_y);
 //myPlanner.computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);
 
-////solve the QPs independently
-myPlanner.solveQPconstraint(height, initial_state_x , zmpLimX,jerk_x);
-myPlanner.solveQPconstraint(height, initial_state_y , zmpLimY,jerk_y);
+////solve the QPs independently (not robust)
+//myPlanner.solveQPconstraint(height, initial_state_x , zmpLimX,jerk_x);
+//myPlanner.solveQPconstraint(0.005,0.001,height, initial_state_y , zmpLimY,jerk_y, true);
+
+//myPlanner.solveQPconstraint(height, initial_state_x , zmpLimX,jerk_x);
+//myPlanner.solveQPconstraintSlack(height, initial_state_x , zmpLimX,jerk_x);
+
+//to add robustness use slacks! will keep the zmp in the middle of the limits
+myPlanner.solveQPconstraintSlack(height, initial_state_x , zmpLimX,jerk_x);
+myPlanner.solveQPconstraintSlack(height, initial_state_y , zmpLimY,jerk_y);
+
 //
+//prt(jerk_x.transpose())
 prt(jerk_x.transpose())
 prt(jerk_y.transpose())
 //
