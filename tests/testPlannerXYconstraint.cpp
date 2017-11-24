@@ -27,6 +27,8 @@ double lateral_bound = 0.2;
 double Ts = 0.1;
 double weight_R = 1e-06;
 double weight_Q = 1;
+int start_phase_index;
+int phase_duration;
 
 VectorXd  jerk_x, jerk_y;
 Vector3d  initial_state_x = Vector3d(0.0,-0.0,0.0);
@@ -57,10 +59,11 @@ zmpLimY.resize(horizon_size);
 
 
 
+/*
 //DECOUPLED
 //iteratilely double stance/single stance
-int start_phase_index = 0;
-int phase_duration = step_knots/2;
+start_phase_index = 0;
+phase_duration = step_knots/2;
 double phase_lower_x_limit = 0.0;
 bool goleft = true;
 double phase_overlap = 0.1;
@@ -119,6 +122,7 @@ zmpLimY.min.segment(start_phase_index, missing_knots).setConstant(-1.0);
 //myPlanner.solveQPconstraint(height, initial_state_x , zmpLimX,jerk_x);
 //myPlanner.solveQPconstraint(0.005,0.001,height, initial_state_y , zmpLimY,jerk_y, true);
 
+//simple
 //myPlanner.solveQPconstraint(height, initial_state_x , zmpLimX,jerk_x);
 //myPlanner.solveQPconstraintSlack(height, initial_state_x , zmpLimX,jerk_x);
 
@@ -136,10 +140,6 @@ myPlanner.computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);
 myPlanner.computeCOMtrajectory( initial_state_x, jerk_x, com_x);
 myPlanner.computeCOMtrajectory( initial_state_y, jerk_y, com_y);
 
-
-
-
-//
 ////prt(zmp_x.transpose())
 //
 //myPlanner.saveTraj("jerk_x.txt", jerk_x);
@@ -153,6 +153,88 @@ myPlanner.saveTraj("max_x.txt", zmpLimX.max);
 myPlanner.saveTraj("min_y.txt", zmpLimY.min);
 myPlanner.saveTraj("max_y.txt", zmpLimY.max);
 
+prt(zmpLimX.min.transpose())
+prt(zmpLimX.max.transpose())
+
+*/
+//COUPLED
+LegDataMap<MPCPlanner::footState> feetStates;
+LegDataMap<double> feetValues;
+FootScheduler schedule; schedule.setSequence(LF,RH,RF,LH);
+double step_x = 0.2;
+
+for (int leg=0;leg<4;leg++){
+    feetStates[leg].resize(horizon_size);
+    //set always stances
+    feetStates[leg].swing.setConstant(horizon_size,false);
+}
+//initial values
+feetValues[LF] = 0.1;
+feetValues[RF] = 0.2;
+feetValues[LH] = feetValues[LF] -distance_per_step;
+feetValues[RH] = feetValues[RF] -distance_per_step;
+
+//init y all the same
+feetStates[LF].y.setConstant(1.0);
+feetStates[RF].y.setConstant(-1.0);
+feetStates[LH].y.setConstant(1.0);
+feetStates[RH].y.setConstant(-1.0);
+
+start_phase_index = 0;
+phase_duration = step_knots/2; //10 samples both swing and phase
+
+for (int i=0; i<number_of_steps-1;i++)
+{
+    //4 stance
+    feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValues[LF]);
+    feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValues[RF]);
+    feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValues[LH]);
+    feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValues[RH]);
+
+
+
+    //3 stance
+    start_phase_index += phase_duration;
+    //step
+    feetValues[schedule.getCurrentSwing()]+= distance_per_step;
+    //set swing for that leg
+    feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
+    feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValues[LF]);
+    feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValues[RF]);
+    feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValues[LH]);
+    feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValues[RH]);
+
+    start_phase_index += phase_duration;
+    schedule.next();
+}
+
+//compute missing knots last phase is double stance
+double missing_knots = horizon_size - start_phase_index;
+//end with 4 stance
+feetStates[LF].x.segment(start_phase_index, missing_knots).setConstant(feetValues[LF]);
+feetStates[RF].x.segment(start_phase_index, missing_knots).setConstant(feetValues[RF]);
+feetStates[LH].x.segment(start_phase_index, missing_knots).setConstant(feetValues[LH]);
+feetStates[RH].x.segment(start_phase_index, missing_knots).setConstant(feetValues[RH]);
+
+//
+////
+//////prt(zmp_x.transpose())
+////
+////myPlanner.saveTraj("jerk_x.txt", jerk_x);
+////myPlanner.saveTraj("jerk_y.txt", jerk_y);
+//myPlanner.saveTraj("zmp_x.txt", zmp_x);
+//myPlanner.saveTraj("zmp_y.txt", zmp_y);
+//myPlanner.saveTraj("com_x.txt", com_x);
+//myPlanner.saveTraj("com_y.txt", com_y);
+myPlanner.saveTraj("footPosLFx.txt",  feetStates[LF].x);
+myPlanner.saveTraj("footPosRFx.txt",  feetStates[RF].x);
+myPlanner.saveTraj("footPosLHx.txt",  feetStates[LH].x);
+myPlanner.saveTraj("footPosRHx.txt",  feetStates[RH].x);
+
+myPlanner.saveTraj("swingLF.txt",  feetStates[LF].swing);
+myPlanner.saveTraj("swingRF.txt",  feetStates[RF].swing);
+myPlanner.saveTraj("swingLH.txt",  feetStates[LH].swing);
+myPlanner.saveTraj("swingRH.txt",  feetStates[RH].swing);
 //prt(zmpLimX.min.transpose())
 //prt(zmpLimX.max.transpose())
 
