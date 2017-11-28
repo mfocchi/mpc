@@ -6,7 +6,9 @@
  */
 #include <crawl_planner/MPCPlanner.h>
 
-using namespace std;      using namespace Eigen;
+using namespace std;
+using namespace Eigen;
+using namespace iit;
 
 #define prt(x) std::cout << #x " = \n" << x << "\n" << std::endl;
 
@@ -82,7 +84,8 @@ void MPCPlanner::setWeights(double weight_R, double weight_Q){
 
 void MPCPlanner::buildMatrix(const Matrix<double, 1,3> C_in, MatrixXd & state_matrix, MatrixXd & input_matrix)
 {
-
+    state_matrix.resize(horizon_size_,3);
+    input_matrix.resize(horizon_size_,horizon_size_);
 
     D1 = C_in*A;
     D2 = C_in*B;
@@ -334,6 +337,70 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     }
 }
 
+void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
+                                          const Eigen::Vector3d & initial_state_x,
+                                          const Eigen::Vector3d & initial_state_y,
+                                          const  MatrixXd & A,  const  VectorXd & b,
+                                          Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y)
+{
+
+    this->height_ = actual_height;
+    Eigen::MatrixXd GQ, CI, CE, Zuc, Zxc, Zyc; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0, solution;
+    //build matrix
+    GQ.resize(2*horizon_size_,2*horizon_size_);
+    g0.resize(2*horizon_size_,1);
+    solution.resize(2*horizon_size_);
+
+    CI.resize(b.size(),2*horizon_size_); //max /min for all horizon
+    ci0.resize(b.size());
+
+    jerk_vector_x.resize(horizon_size_);
+    jerk_vector_y.resize(horizon_size_);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+
+    //Finds x that minimizes xddd^T * Q * xddd where xddd = [xddd_x, xddd_y]
+    GQ.setIdentity(); GQ*=weight_R;
+    g0.setZero();
+
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //inequalities
+    //Zuc is block diagonal
+    Zuc.resize(2*horizon_size_,2*horizon_size_); Zuc.setZero();
+    Zuc.block(0,0,horizon_size_,horizon_size_) = Zu;
+    Zuc.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Zu;
+
+//    //Zxc, Zyc are columns
+    Zxc.resize(2*horizon_size_,3);Zxc.setZero();
+    Zxc.block(0,0,horizon_size_,3) = Zx;
+    Zyc.resize(2*horizon_size_,3);Zyc.setZero();
+    Zyc.block(horizon_size_,0,horizon_size_,3) = Zx;
+//
+
+    CI = A*Zuc;
+    ci0 = b + A*(Zxc*initial_state_x + Zyc*initial_state_y);
+
+
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+    else {
+        prt(solution.transpose())
+        jerk_vector_x = solution.segment(0,horizon_size_);
+        jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
+    }
+
+    //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
+
+    all_violations_ =CI*solution + ci0;
+    prt((CI*solution + ci0).transpose())
+
+}
 
 
 
@@ -388,5 +455,72 @@ void MPCPlanner::debug()
     cout << "Here are the coefficients on the 1st super-diagonal and 2nd sub-diagonal of m:" << endl
          << m.diagonal(1).transpose() << endl
          << m.diagonal(-2).transpose() << endl;
+
+}
+
+void  MPCPlanner::buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetStates, const int start_phase_index,
+                                     const int phase_duration, const int horizon_size,
+                                     Eigen::MatrixXd & A, Eigen::VectorXd & b, int & number_of_constraints )
+{
+    std::vector<Vector3d> footCCwiseSorted;
+    std::vector<LineCoeff2d> lineCoeff;
+    int edgeCounter;
+    if (phase_duration !=0)
+    {
+        //comopute the number of stances
+        edgeCounter = 0;
+        footCCwiseSorted.resize(0);
+        for (int leg = 0; leg<4; leg++){
+            if (!feetStates[dog::LegID(leg)].swing(start_phase_index)){
+                Vector3d footPosXY = Vector3d( feetStates[dog::LegID(leg)].x(start_phase_index) , feetStates[dog::LegID(leg)].y(start_phase_index) , 0.0);
+                footCCwiseSorted.push_back(footPosXY);
+                edgeCounter++;
+                //prt(footPosXY.transpose())
+            }
+        }
+        lineCoeff.resize(edgeCounter);
+        //sort the positions
+        CounterClockwiseSort(footCCwiseSorted);
+        //cycle along the ordered feet to compute the line coeff p*xcp + q*ycp  +r  > + stability_margin
+        for(int edgeCounter = 0; edgeCounter<lineCoeff.size(); edgeCounter++){
+            //compute the coeffs of the line between two feet
+            lineCoeff[edgeCounter] = iit::LineCoeff(footCCwiseSorted[edgeCounter],  footCCwiseSorted[(edgeCounter + 1) % lineCoeff.size()], true); //I set true to normalize and use stab margin
+            //prt(footCCwiseSorted[edgeCounter].transpose())
+        }
+
+
+        //apply the coeff to the A matrix that is (horizon_size*4/3 )X( 2*horizon_size), fill in the same value for all the phase duration
+        for(int i=0; i < phase_duration;i++){
+            for(int edgeCounter = 0; edgeCounter<lineCoeff.size(); edgeCounter++){
+                A(number_of_constraints + edgeCounter, start_phase_index + i) = lineCoeff[edgeCounter].p;
+                A(number_of_constraints + edgeCounter, start_phase_index + i + horizon_size) = lineCoeff[edgeCounter].q;
+                b(number_of_constraints + edgeCounter) = lineCoeff[edgeCounter].r;
+            }
+            number_of_constraints+=lineCoeff.size();
+        }
+    }
+
+}
+
+Eigen::VectorXd   MPCPlanner::getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates)
+{
+    Eigen::VectorXd constraint_violation_;
+    constraint_violation_.resize(horizon_size_);
+    Eigen::VectorXd col;
+    int number_of_constraints = 0;
+     for (int i =0; i<horizon_size_;i++)
+     {
+         //count numner of edges
+         int number_of_edges = 0;
+         for (int leg =0; leg<4; leg++)
+         {
+             if (!feetStates[leg].swing(i))
+                  number_of_edges++;
+         }
+         col = all_violations_.segment(number_of_constraints,number_of_edges);
+         number_of_constraints +=number_of_edges;
+         constraint_violation_(i) = col.minCoeff();
+     }
+    return constraint_violation_;
 
 }

@@ -14,7 +14,8 @@
 #include <Eigen/Dense>
 
 #include <crawl_planner/eiquadprog.hpp>
-
+#include <iit/commons/dog/leg_data_map.h>
+#include <crawl_controller/robotSpecifics.h> //this is for linecoeffd
 
 class MPCPlanner
 {
@@ -26,6 +27,16 @@ class MPCPlanner
             Eigen::VectorXd min;
             void resize(double size) { max.resize(size);
                                        min.resize(size); }
+    };
+    struct footState{
+         Eigen::VectorXd x;
+         Eigen::VectorXd y;
+         Eigen::VectorXd swing;
+         void resize(double size) {
+             x.resize(size);
+             y.resize(size);
+             swing.resize(size);
+         }
     };
 
         enum state_type{POSITION=0, VELOCITY, ACCELERATION};
@@ -56,8 +67,14 @@ class MPCPlanner
         void solveQPconstraintSlack(const double actual_height, const Eigen::Vector3d & initial_state,
                                     const  BoxLimits & zmpLim,  Eigen::VectorXd & jerk_vector);
 
+        void solveQPConstraintCoupled(const double actual_height, const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
+                                      const  Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,  Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y);
 
+        void  buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetStates, const int start_phase_index,
+                                             const int phase_duration, const int horizon_size,
+                                             Eigen::MatrixXd & A, Eigen::VectorXd & b, int & number_of_constraints );
         void setHorizonSize(int horizon);
+        Eigen::VectorXd  getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates);
     private:
 
 
@@ -67,6 +84,8 @@ class MPCPlanner
         Eigen::Matrix<double, 1, 3> D1;
         int horizon_size_;
         Eigen::VectorXd initial_state_;
+        Eigen::VectorXd all_violations_;
+
         double weight_R, weight_Q;
         Eigen::Matrix<double,3,3> A;
         Eigen::Matrix<double,3,1> B;

@@ -101,7 +101,7 @@ void CrawlPlanner::starting(double time) {
 
 
     //in the init there is not the state of the robot
-    gl.param_file = ros::package::getPath(std::string("crawl_planner")) + "/config/crawl_options.ini";
+    gl.param_file = ros::package::getPath(std::string("crawl_planner")) + "/config/planner.ini";
 
     //this is stuff that needs the first state to arrive...
     //	// Converting WholeBodyState to RobCoGen
@@ -567,6 +567,87 @@ void CrawlPlanner::start_crawl(void)
         gl.footPosDes = sample_footPosDes = gl.footPos;
     }
 }
+
+
+//void CrawlController::fill_ZMP_traj(LegID preview_start_swing_index, LegDataMap<Vector3d> sampleFootPosDes, double missingTime)//TODO input actual current swing leg and remaining time
+//{
+//    int count = 0;
+//    LegID swing_index;
+//    LegDataMap<Vector3d> footDesTraj;
+//    Vector3d actualzmp;actualzmp.setZero(); //first value is done by the feet pos
+//    Vector3d triangle_bary;
+//    FootScheduler ZMPSchedule(RH, RF, LH, LF);
+//    ZMPSchedule.setCurrentSwing(preview_start_swing_index);
+//
+//    int num_samples_swing = floor(swingTrajDuration*taskServoRate);
+//    int num_samples_to_TD = floor(missingTime*taskServoRate);
+//    double stab_margin = 0.15;
+//    zmp_traj.resize(2, num_traj_samples);
+//    footDesTraj = sampleFootPosDes;
+//
+//    //start filling the buffer with the uncomplete 1 st step
+//    swing_index = ZMPSchedule.getCurrentSwing();
+//
+//    Matrix3d Rdes = commons::rpyToRot(Vector3d(0,0,0));
+//    bodyTargetHandler->computeBaryNextTriangle(Rdes, swing_index, footDesTraj, Vector3d(0,0,1), stab_margin, triangle_bary);
+//    actualzmp.segment(rbd::X,2) += triangle_bary.segment(rbd::X,2);
+//    actualzmp(rbd::Z) = gl.des_height;
+//
+//
+//
+//    //the step has already been done
+//    zmp_traj.block(rbd::X, 0, 1, num_samples_to_TD) = actualzmp(rbd::X)*MatrixXd::Ones(1, num_samples_to_TD);
+//    zmp_traj.block(rbd::Y, 0, 1, num_samples_to_TD) = actualzmp(rbd::Y)*MatrixXd::Ones(1, num_samples_to_TD);
+//    footDesTraj[swing_index] +=Vector3d(ZMPstep_x, ZMPstep_y,0.0);//TODO replace with stephandler compute steps
+//    count = count +num_samples_to_TD;
+//    //gl.print_swing_leg(swing_index);
+//    //prt(triangle_bary)
+//    //prt(footDesTraj)
+//    ZMPSchedule.next();
+//
+//    while (count<=num_traj_samples)
+//    {
+//        swing_index = ZMPSchedule.getCurrentSwing();
+//
+//
+//
+//        bodyTargetHandler->computeBaryNextTriangle(Rdes, swing_index, footDesTraj, Vector3d(0,0,1), stab_margin, triangle_bary);
+//        actualzmp.segment(rbd::X,2) += triangle_bary.segment(rbd::X,2);
+//        actualzmp(rbd::Z) = gl.des_height;
+//        if ((count+num_samples_swing)<=zmp_traj.cols()){
+//            zmp_traj.block(rbd::X, count, 1, num_samples_swing) = actualzmp(rbd::X)*MatrixXd::Ones(1, num_samples_swing);
+//            zmp_traj.block(rbd::Y, count, 1, num_samples_swing) = actualzmp(rbd::Y)*MatrixXd::Ones(1, num_samples_swing);
+//        }else
+//        {
+//            zmp_traj.block(rbd::X, count, 1, zmp_traj.cols()-count) =  actualzmp(rbd::X)*MatrixXd::Ones(1, zmp_traj.size()-count);
+//            zmp_traj.block(rbd::Y, count, 1, zmp_traj.cols()-count) = actualzmp(rbd::Y)*MatrixXd::Ones(1, zmp_traj.size()-count);
+//        }
+//        footDesTraj[swing_index] +=Vector3d(ZMPstep_x, ZMPstep_y,0.0);//TODO replace with stephandler compute steps
+//        count += num_samples_swing;
+//        //gl.print_swing_leg(swing_index);
+//        //prt(triangle_bary)
+//        //prt(footDesTraj)
+//        ZMPSchedule.next();
+//
+//    }
+//    zmp(rbd::X) = zmp_traj(0,0);
+//    zmp(rbd::Y) = zmp_traj(1,0);
+//    //zmp_150(rbd::X) = zmp_traj(0,150);
+//    //zmp_150(rbd::Y) = zmp_traj(1,150);
+//
+//    //prt(zmp_traj)
+//}
+//
+//void CrawlController::plotZMPtraj()
+//{
+//    fill_ZMP_traj(iit::dog::RH, gl.footPosDes, 1.0);
+//    plotTimer.setDuration(dt*num_traj_samples);
+//    plotTimer.startTimer(taskServoTime);
+//    plotZMPFlag = true;
+//}
+
+
+
 //TODO implement client server to strt trunk contr
 
 
