@@ -25,14 +25,14 @@ class MPCPlanner
     struct BoxLimits{
             Eigen::VectorXd max;
             Eigen::VectorXd min;
-            void resize(double size) { max.resize(size);
+            void resize(int size) { max.resize(size);
                                        min.resize(size); }
     };
     struct footState{
          Eigen::VectorXd x;
          Eigen::VectorXd y;
          Eigen::VectorXd swing;
-         void resize(double size) {
+         void resize(int size) {
              x.resize(size);
              y.resize(size);
              swing.resize(size);
@@ -46,7 +46,9 @@ class MPCPlanner
         void setWeights(double weight_R, double weight_Q);
         void debug();
 
-        void saveTraj(const std::string finename, const Eigen::VectorXd & zmp);
+        void saveTraj(const std::string finename, const Eigen::VectorXd & var);
+
+        void saveTraj(const std::string finename, const Eigen::VectorXd & var_x, const Eigen::VectorXd & var_y, int size = 1000);
 
         void computeZMPtrajectory(const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
                                  const Eigen::VectorXd & jerk_x, const Eigen::VectorXd & jerk_y,

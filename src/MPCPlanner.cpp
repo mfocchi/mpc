@@ -427,6 +427,31 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var)
     }
 }
 
+void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, const VectorXd & var_y, int size)
+{
+    double time = 0.0;
+
+    if (size == 1000)
+    {
+        size = horizon_size_;
+    }
+
+    std::ofstream file;
+    file.open(finename.c_str());
+
+    for (int i=0; i<size;i++)
+    {
+        file<<time <<" ";
+        file<< var_x(i) <<" ";
+        file<< var_y(i) <<" ";
+        file <<  std::endl;
+        time+=Ts;
+    }
+    printf("done saving x and y vars\n");
+    file.close();
+}
+
+
 
 void MPCPlanner::debug()
 {
