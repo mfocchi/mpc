@@ -15,6 +15,10 @@ using namespace Eigen;
 using namespace std;
 #define prt(x) std::cout << #x " = \n" << x << "\n" << std::endl;
 
+void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
+                  const double distance, const int number_of_steps, const int horizon_size,
+                  LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner);
 int main()
 {
 
@@ -30,14 +34,13 @@ double lateral_bound = 0.2;
 double Ts = 0.1;
 double weight_R = 1e-06;
 double weight_Q = 1;
-int start_phase_index;
-int phase_duration;
 
 VectorXd  jerk_x, jerk_y;
 Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
 Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
 VectorXd zmp_x, zmp_y, com_x, com_y;
 MPCPlanner::BoxLimits zmpLimX, zmpLimY;
+MatrixXd A; VectorXd b;
 
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
@@ -49,120 +52,33 @@ newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1))
 newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
 
 
-double distance_per_step = distance/number_of_steps;
-double lateral_sway = 0.5;
-int step_knots = floor(horizon_size/number_of_steps);
-
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 myPlanner.setWeights(weight_R, weight_Q);
 
-//compute polygons
 zmpLimX.resize(horizon_size);
 zmpLimY.resize(horizon_size);
-//COUPLED
+
+
+//compute polygons
 LegDataMap<MPCPlanner::footState> feetStates;
 LegDataMap<MPCPlanner::footState> footHolds;
-
-
-LegDataMap<double> feetValuesX, feetValuesY;
-FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
-
-for (int leg=0;leg<4;leg++){
-    feetStates[leg].resize(horizon_size);
-    //set always stances
-    feetStates[leg].swing.setConstant(horizon_size,false);
-    footHolds[leg].resize(2*number_of_steps);
-}
 //initial values
 //the initial value of the zmp should be inside the initial polygon otherwise it does not find a solution!!
 //so be careful with initial values of com!
-feetValuesX[LF] = 0.1;
-feetValuesX[RF] = 0.2;
-feetValuesX[LH] = feetValuesX[LF] - 0.5;
-feetValuesX[RH] = feetValuesX[RF] -0.5;
-
+LegDataMap<double> initial_feet_x;
+LegDataMap<double> initial_feet_y;
+initial_feet_x[LF] = initial_state_x(0) + 0.1;
+initial_feet_x[RF] = initial_state_x(0) + 0.2;
+initial_feet_x[LH] = initial_feet_x[LF] - 0.5;
+initial_feet_x[RH] = initial_feet_x[RF] -0.5;
 //init y all the same
-feetValuesY[LF] = 1.0;
-feetValuesY[RF] = -1.0;
-feetValuesY[LH] = 1.0;
-feetValuesY[RH] = -1.0;
+initial_feet_y[LF] = 1.0;
+initial_feet_y[RF] = -1.0;
+initial_feet_y[LH] = 1.0;
+initial_feet_y[RH] = -1.0;
 
-start_phase_index = 0;
-phase_duration = step_knots/2; //10 samples both swing and phase
-MatrixXd A; VectorXd b;
-A.resize((4+4)*phase_duration*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
-b.resize((4+4)*phase_duration*number_of_steps);
-A.setZero();
-b.setZero();
-int number_of_constraints=0;
+computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
 
-prt(phase_duration)
-for (int i=0; i<number_of_steps;i++)
-{
-    //4 stance
-    feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
-    feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
-    feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
-    feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
-
-    feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
-    feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
-    feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
-    feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
-    //save footholds
-    footHolds[LF].x(2*i) = feetValuesX[LF]; footHolds[LF].y(2*i) = feetValuesY[LF];
-    footHolds[RF].x(2*i) = feetValuesX[RF]; footHolds[RF].y(2*i) = feetValuesY[RF];
-    footHolds[LH].x(2*i) = feetValuesX[LH]; footHolds[LH].y(2*i) = feetValuesY[LH];
-    footHolds[RH].x(2*i) = feetValuesX[RH]; footHolds[RH].y(2*i) = feetValuesY[RH];
-
-    //build inequalities with the set of stance feet and positions
-    myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration, horizon_size, A,  b,  number_of_constraints );
-    start_phase_index += phase_duration;
-
-    //3 stance
-    //step
-    feetValuesX[schedule.getCurrentSwing()]+= distance_per_step;
-    feetValuesY[schedule.getCurrentSwing()]+= 0.2;
-    //set swing for that leg
-    feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
-    feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
-    feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
-    feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
-    feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
-
-    feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
-    feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
-    feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
-    feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
-    //save footholds
-    footHolds[LF].x(2*i + 1) = feetValuesX[LF]; footHolds[LF].y(2*i +1) = feetValuesY[LF];
-    footHolds[RF].x(2*i + 1) = feetValuesX[RF]; footHolds[RF].y(2*i +1) = feetValuesY[RF];
-    footHolds[LH].x(2*i + 1) = feetValuesX[LH]; footHolds[LH].y(2*i +1) = feetValuesY[LH];
-    footHolds[RH].x(2*i + 1) = feetValuesX[RH]; footHolds[RH].y(2*i +1) = feetValuesY[RH];
-//    //build inequalities with the set of stance feet and positions
-    myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration,horizon_size, A,  b,  number_of_constraints );
-    start_phase_index += phase_duration;
-    schedule.next(); //update the step in the schedule
-
-
-}
-//compute missing knots last phase is double stance
-int missing_knots = horizon_size - start_phase_index;
-//end with 4 stance
-feetStates[LF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LF]);
-feetStates[RF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RF]);
-feetStates[LH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LH]);
-feetStates[RH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RH]);
-feetStates[LF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LF]);
-feetStates[RF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RF]);
-feetStates[LH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LH]);
-feetStates[RH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RH]);
-
-myPlanner.buildPolygonMatrix(feetStates, start_phase_index,missing_knots,horizon_size, A,  b,  number_of_constraints);
-//cause you have 3 stances
-A.conservativeResize(number_of_constraints,horizon_size*2);
-b.conservativeResize(number_of_constraints);
-prt(missing_knots)
 //prt(A)
 //prt(b)
 
@@ -206,13 +122,104 @@ myPlanner.saveTraj("swingLH.txt",  feetStates[LH].swing);
 myPlanner.saveTraj("swingRH.txt",  feetStates[RH].swing);
 //prt(zmpLimX.min.transpose())
 //prt(zmpLimX.max.transpose())
-
-
-//*/
-
-
-
-
-
-
 }
+
+void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
+                  double distance, const int number_of_steps, const int horizon_size,
+                  LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner)
+{
+
+    FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
+    int start_phase_index,  phase_duration, number_of_constraints;
+    double distance_per_step = distance/number_of_steps;
+    int step_knots = floor(horizon_size/number_of_steps);
+    LegDataMap<double> feetValuesX, feetValuesY;
+
+    feetValuesX = initial_feet_x;
+    feetValuesY = initial_feet_y;
+
+    //init stuff
+    number_of_constraints = 0;
+    start_phase_index = 0;
+    phase_duration = step_knots/2; //10 samples both swing and phase
+    A.resize((4+4)*phase_duration*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
+    b.resize((4+4)*phase_duration*number_of_steps);
+    A.setZero();
+    b.setZero();
+
+    for (int leg=0;leg<4;leg++){
+        feetStates[leg].resize(horizon_size);
+        //set always stances
+        feetStates[leg].swing.setConstant(horizon_size,false);
+        footHolds[leg].resize(2*number_of_steps);
+    }
+
+
+    prt(phase_duration)
+    for (int i=0; i<number_of_steps;i++)
+    {
+        //4 stance///////////////////////////
+        feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
+        feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
+        feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
+        feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
+        feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
+        feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
+        feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
+        feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
+        //save footholds
+        footHolds[LF].x(2*i) = feetValuesX[LF]; footHolds[LF].y(2*i) = feetValuesY[LF];
+        footHolds[RF].x(2*i) = feetValuesX[RF]; footHolds[RF].y(2*i) = feetValuesY[RF];
+        footHolds[LH].x(2*i) = feetValuesX[LH]; footHolds[LH].y(2*i) = feetValuesY[LH];
+        footHolds[RH].x(2*i) = feetValuesX[RH]; footHolds[RH].y(2*i) = feetValuesY[RH];
+        //build inequalities with the set of stance feet and positions
+        myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration, horizon_size, A,  b,  number_of_constraints );
+        start_phase_index += phase_duration;
+
+        //3 stance/////////////////////////////////////
+        //step
+        feetValuesX[schedule.getCurrentSwing()]+= distance_per_step;
+        feetValuesY[schedule.getCurrentSwing()]+= 0.2;
+        //set swing for that leg
+        feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
+        feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
+        feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
+        feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
+        feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
+        feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
+        feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
+        feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
+        feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
+        //save footholds
+        footHolds[LF].x(2*i + 1) = feetValuesX[LF]; footHolds[LF].y(2*i +1) = feetValuesY[LF];
+        footHolds[RF].x(2*i + 1) = feetValuesX[RF]; footHolds[RF].y(2*i +1) = feetValuesY[RF];
+        footHolds[LH].x(2*i + 1) = feetValuesX[LH]; footHolds[LH].y(2*i +1) = feetValuesY[LH];
+        footHolds[RH].x(2*i + 1) = feetValuesX[RH]; footHolds[RH].y(2*i +1) = feetValuesY[RH];
+    //    //build inequalities with the set of stance feet and positions
+        myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration,horizon_size, A,  b,  number_of_constraints );
+        start_phase_index += phase_duration;
+        schedule.next(); //update the step in the schedule
+    }
+    //compute missing knots last phase is double stance
+    int missing_knots = horizon_size - start_phase_index;
+    //end with 4 stance
+    feetStates[LF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LF]);
+    feetStates[RF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RF]);
+    feetStates[LH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LH]);
+    feetStates[RH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RH]);
+    feetStates[LF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LF]);
+    feetStates[RF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RF]);
+    feetStates[LH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LH]);
+    feetStates[RH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RH]);
+
+    myPlanner.buildPolygonMatrix(feetStates, start_phase_index,missing_knots,horizon_size, A,  b,  number_of_constraints);
+    //cause you have 3 stances
+    A.conservativeResize(number_of_constraints,horizon_size*2);
+    b.conservativeResize(number_of_constraints);
+    //prt(missing_knots)
+}
+
+
+
+
