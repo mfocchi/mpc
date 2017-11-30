@@ -9,7 +9,7 @@
 
 #include <crawl_planner/MPCPlanner.h>
 #include <dls_controller/support/ConsoleUtility.h>
-#include <crawl_controller/FootScheduler.h>
+#include <crawl_planner/FootScheduler.h> //TODO fix this
 
 using namespace Eigen;
 using namespace std;
@@ -18,7 +18,7 @@ using namespace std;
 void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
                   const double distance, const int number_of_steps, const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner);
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule);
 int main()
 {
 
@@ -38,10 +38,10 @@ double weight_Q = 1;
 VectorXd  jerk_x, jerk_y;
 Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
 Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
-VectorXd zmp_x, zmp_y, com_x, com_y;
+VectorXd zmp_x, zmp_y, com_x, com_y, viol;
 MPCPlanner::BoxLimits zmpLimX, zmpLimY;
 MatrixXd A; VectorXd b;
-
+FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
 newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
@@ -50,7 +50,6 @@ newline::getDouble("weight Q:", weight_Q, weight_Q);
 newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
 newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
 newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
-
 
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 myPlanner.setWeights(weight_R, weight_Q);
@@ -70,29 +69,50 @@ LegDataMap<double> initial_feet_y;
 initial_feet_x[LF] = initial_state_x(0) + 0.1;
 initial_feet_x[RF] = initial_state_x(0) + 0.2;
 initial_feet_x[LH] = initial_feet_x[LF] - 0.5;
-initial_feet_x[RH] = initial_feet_x[RF] -0.5;
+initial_feet_x[RH] = initial_feet_x[RF] - 0.5;
 //init y all the same
 initial_feet_y[LF] = 1.0;
 initial_feet_y[RF] = -1.0;
 initial_feet_y[LH] = 1.0;
 initial_feet_y[RH] = -1.0;
 
-computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
-
-//prt(A)
-//prt(b)
-
-
-
+//first time solve the optim in the steps
+computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner, schedule);
 myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
-VectorXd viol = myPlanner.getConstraintViolation(feetStates);
+Vector3d  actual_state_x,actual_state_y;
+
+int horizonWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
+
+//integrate equation for the replanning horizon
+
+for (int sample= 0; sample<horizonWindow; sample++)
+{
+    actual_state_x = myPlanner.computeCOMtrajectory(initial_state_x, jerk_x.segment(0,sample+1)); //size cannot be lower than 1
+    actual_state_y = myPlanner.computeCOMtrajectory(initial_state_y, jerk_y.segment(0,sample+1)); //size cannot be lower than 1
+}
+
+//computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
+//myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
+
+
+
+
+//old stuff
+//computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
+//myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
+//viol = myPlanner.getConstraintViolation(feetStates);
 prt(jerk_x.transpose())
 prt(jerk_y.transpose())
+
 
 myPlanner.computeZMPtrajectory( initial_state_x, jerk_x, zmp_x);
 myPlanner.computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);
 myPlanner.computeCOMtrajectory( initial_state_x, jerk_x, com_x);
 myPlanner.computeCOMtrajectory( initial_state_y, jerk_y, com_y);
+
+VectorXd com_xd, com_yd;
+myPlanner.computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
+myPlanner.computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
 
 myPlanner.saveTraj("jerk_x.txt", jerk_x);
 myPlanner.saveTraj("jerk_y.txt", jerk_y);
@@ -100,6 +120,8 @@ myPlanner.saveTraj("zmp_x.txt", zmp_x);
 myPlanner.saveTraj("zmp_y.txt", zmp_y);
 myPlanner.saveTraj("com_x.txt", com_x);
 myPlanner.saveTraj("com_y.txt", com_y);
+myPlanner.saveTraj("com_xd.txt", com_xd);
+myPlanner.saveTraj("com_yd.txt", com_yd);
 myPlanner.saveTraj("viol.txt",  viol);
 
 myPlanner.saveTraj("footPosLFx.txt",  feetStates[LF].x);
@@ -127,10 +149,10 @@ myPlanner.saveTraj("swingRH.txt",  feetStates[RH].swing);
 void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
                   double distance, const int number_of_steps, const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner)
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule)
 {
 
-    FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
+
     int start_phase_index,  phase_duration, number_of_constraints;
     double distance_per_step = distance/number_of_steps;
     int step_knots = floor(horizon_size/number_of_steps);

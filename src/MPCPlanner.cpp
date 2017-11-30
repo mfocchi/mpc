@@ -138,7 +138,7 @@ void  MPCPlanner::computeZMPtrajectory(const Vector3d & initial_state_x, const V
 
 void  MPCPlanner::computeZMPtrajectory(const Vector3d & initial_state, const VectorXd & jerk, VectorXd & zmp)
 {
-    zmp.resize(horizon_size_);
+    zmp.resize(jerk.size());
     buildMatrix(Cz,Zx,Zu);
     zmp = Zx*initial_state + Zu*jerk;
 }
@@ -151,10 +151,21 @@ void MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state_x,  const 
     computeCOMtrajectory(initial_state_x, jerk_x, traj_x, state);
     computeCOMtrajectory(initial_state_y, jerk_y, traj_y, state);
 }
+//this outputs just the last element
+Vector3d MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state, const VectorXd & jerk)
+{
+    VectorXd traj_x, traj_xd, traj_xdd;
+    computeCOMtrajectory(initial_state, jerk, traj_x, POSITION);
+    computeCOMtrajectory(initial_state, jerk, traj_xd, VELOCITY);
+    computeCOMtrajectory(initial_state, jerk, traj_xdd, ACCELERATION);
+    Vector3d last_state;
+    last_state << traj_x.tail(1), traj_xd.tail(1), traj_xdd.tail(1);
+    return last_state;
+}
 
 void MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state, const VectorXd & jerk, VectorXd & traj, const state_type state)
 {
-    traj.resize(horizon_size_);
+    traj.resize(jerk.size());
 
     switch(state)
     {

@@ -55,6 +55,9 @@ class MPCPlanner
                                  Eigen::VectorXd & zmp_x, Eigen::VectorXd &zmp_y);
         void computeZMPtrajectory(const Eigen::Vector3d & initial_state_, const Eigen::VectorXd & jerk, Eigen::VectorXd & zmp);
 
+
+        Eigen::Vector3d computeCOMtrajectory( const  Eigen::Vector3d & initial_state, const  Eigen::VectorXd & jerk);
+
         void computeCOMtrajectory(const Eigen::Vector3d & initial_state_,
                                   const Eigen::VectorXd & jerk,
                                   Eigen::VectorXd & traj,
@@ -62,7 +65,7 @@ class MPCPlanner
         void computeCOMtrajectory( const Eigen::Vector3d & initial_state_x,  const Eigen::Vector3d & initial_state_y,
                                    const Eigen::VectorXd & jerk_x, const Eigen::VectorXd & jerk_y,
                                    Eigen::VectorXd & traj_x, Eigen::VectorXd &traj_y, const state_type state = POSITION);
-        void buildMatrix(const Eigen::Matrix<double, 1,3> C_in, Eigen::MatrixXd & state_matrix, Eigen::MatrixXd & input_matrix);
+        void buildMatrix(const Eigen::Matrix<double, 1,3> C_in, Eigen::MatrixXd & state_matrix, Eigen::MatrixXd & input_matrix, int  size = 1000);
         void solveQP(const double actual_height, const Eigen::Vector3d & initial_state,const  Eigen::VectorXd & zmp_ref,  Eigen::VectorXd & jerk_vector);
         void solveQPconstraint(const double actual_height, const Eigen::Vector3d & initial_state,
                                const  BoxLimits & zmpLim,  Eigen::VectorXd & jerk_vector);
