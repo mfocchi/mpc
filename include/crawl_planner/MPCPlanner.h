@@ -58,6 +58,9 @@ class MPCPlanner
 
         Eigen::Vector3d computeCOMtrajectory( const  Eigen::Vector3d & initial_state, const  Eigen::VectorXd & jerk);
 
+        //compute x_k+1 from x_k
+        void  computeCOMupdate(Eigen::Vector3d & actualCom, const double jerk_sample);
+
         void computeCOMtrajectory(const Eigen::Vector3d & initial_state_,
                                   const Eigen::VectorXd & jerk,
                                   Eigen::VectorXd & traj,

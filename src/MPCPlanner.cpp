@@ -560,3 +560,8 @@ Eigen::VectorXd   MPCPlanner::getConstraintViolation(const iit::dog::LegDataMap<
     return constraint_violation_;
 
 }
+
+void MPCPlanner::computeCOMupdate(Eigen::Vector3d & actualCom, const double jerk_sample)
+{
+    actualCom = A*actualCom + B*jerk_sample;
+}
