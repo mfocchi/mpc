@@ -46,9 +46,9 @@ class MPCPlanner
         void setWeights(double weight_R, double weight_Q);
         void debug();
 
-        void saveTraj(const std::string finename, const Eigen::VectorXd & var);
+        void saveTraj(const std::string finename, const Eigen::VectorXd & var, bool verbose = true);
 
-        void saveTraj(const std::string finename, const Eigen::VectorXd & var_x, const Eigen::VectorXd & var_y, int size = 1000);
+        void saveTraj(const std::string finename, const Eigen::VectorXd & var_x, const Eigen::VectorXd & var_y, bool verbose = true);
 
         void computeZMPtrajectory(const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
                                  const Eigen::VectorXd & jerk_x, const Eigen::VectorXd & jerk_y,

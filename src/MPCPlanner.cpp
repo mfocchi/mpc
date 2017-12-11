@@ -425,42 +425,35 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 
 
 
-void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var)
+void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool verbose)
 {
     double time = 0.0;
 
-    if (var.size() == horizon_size_)
-    {
-        std::ofstream file;
-        file.open(finename.c_str());
-
-        for (int i=0; i<horizon_size_;i++)
-        {
-            file<<time <<" ";
-            file<< var(i) <<" ";
-            file <<  std::endl;
-            time+=Ts;
-        }
-        printf("done saving\n");
-        file.close();
-    } else {
-        std::cout<< "var has not been filled in"<<std::endl;
-    }
-}
-
-void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, const VectorXd & var_y, int size)
-{
-    double time = 0.0;
-
-    if (size == 1000)
-    {
-        size = horizon_size_;
-    }
 
     std::ofstream file;
     file.open(finename.c_str());
 
-    for (int i=0; i<size;i++)
+    for (int i=0; i<var.size();i++)
+    {
+        file<<time <<" ";
+        file<< var(i) <<" ";
+        file <<  std::endl;
+        time+=Ts;
+    }
+    if (verbose)
+        printf("done saving\n");
+    file.close();
+
+}
+
+void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, const VectorXd & var_y, bool verbose)
+{
+    double time = 0.0;
+
+    std::ofstream file;
+    file.open(finename.c_str());
+
+    for (int i=0; i<var_x.size();i++)
     {
         file<<time <<" ";
         file<< var_x(i) <<" ";
@@ -468,7 +461,8 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, co
         file <<  std::endl;
         time+=Ts;
     }
-    printf("done saving x and y vars\n");
+    if (verbose)
+        printf("done saving x and y vars\n");
     file.close();
 }
 
