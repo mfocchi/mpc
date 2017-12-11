@@ -82,45 +82,56 @@ void MPCPlanner::setWeights(double weight_R, double weight_Q){
 
 }
 
-void MPCPlanner::buildMatrix(const Matrix<double, 1,3> C_in, MatrixXd & state_matrix, MatrixXd & input_matrix)
+void MPCPlanner::buildMatrix(const Matrix<double, 1,3> C_in, MatrixXd & state_matrix, MatrixXd & input_matrix, int  size)
 {
-    state_matrix.resize(horizon_size_,3);
-    input_matrix.resize(horizon_size_,horizon_size_);
+    if (size == 1000)
+    {
+        size = horizon_size_;
+    }
+    state_matrix.resize(size,3);
+    input_matrix.resize(size,size);
 
     D1 = C_in*A;
     D2 = C_in*B;
 
 
-    //first fill in Px matrix
+    //first fill in #x matrix
     MatrixXd element;
     element = D1;
     //set the first element D1
     state_matrix.row(0) = D1;
 
-    for (int i=1; i<horizon_size_; i++)
+    if (size >1) //fill in only if the size is bigger than 1
     {
-        element = element* A; //update
-        state_matrix.row(i) = element;
+        for (int i=1; i<size; i++)
+        {
+            element = element* A; //update
+            state_matrix.row(i) = element;
+        }
     }
     //prt(Px)
 
-    //second fill in Pu matrix
+    //second fill in #u matrix
     //set the diagonal to D2
     input_matrix.diagonal().setConstant(D2);
-    //set the first subdiagonal to D1*B
-    input_matrix.diagonal(-1).setConstant(D1*B);
 
-    //set the second subdiagonal to D1*A*B
-    Matrix<double,1,3> dummy_vec;
-    dummy_vec = D1*A;
-    input_matrix.diagonal(-2).setConstant(dummy_vec*B);
-
-
-    //for the other subdiagonals of the toeplitz matrix
-    for (int i=3; i<horizon_size_; i++)
+    if (size >1) //fill in only if the size is bigger than 1
     {
-        dummy_vec = dummy_vec* A;
-        input_matrix.diagonal(-i).setConstant(dummy_vec * B);
+        //set the first subdiagonal to D1*B
+        input_matrix.diagonal(-1).setConstant(D1*B);
+
+        //set the second subdiagonal to D1*A*B
+        Matrix<double,1,3> dummy_vec;
+        dummy_vec = D1*A;
+        input_matrix.diagonal(-2).setConstant(dummy_vec*B);
+
+
+        //for the other subdiagonals of the toeplitz matrix
+        for (int i=3; i<size; i++)
+        {
+            dummy_vec = dummy_vec* A;
+            input_matrix.diagonal(-i).setConstant(dummy_vec * B);
+        }
     }
 //    prt(Pu)
 }
@@ -166,21 +177,20 @@ Vector3d MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state, const
 void MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state, const VectorXd & jerk, VectorXd & traj, const state_type state)
 {
     traj.resize(jerk.size());
-
     switch(state)
     {
         case POSITION:
-            buildMatrix(Cx,Xpx,Xpu);
+            buildMatrix(Cx,Xpx,Xpu, jerk.size());
             traj = Xpx*initial_state + Xpu*jerk;
 
         break;
         case VELOCITY:
-            buildMatrix(Cv,Xvx,Xvu);
+            buildMatrix(Cv,Xvx,Xvu, jerk.size());
             traj = Xvx*initial_state + Xvu*jerk;
 
         break;
         case ACCELERATION:
-            buildMatrix(Ca,Xax,Xau);
+            buildMatrix(Ca,Xax,Xau, jerk.size());
             traj = Xax*initial_state + Xau*jerk;
 
         break;
@@ -401,7 +411,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
     if(result == std::numeric_limits<double>::infinity())
         {cout<<"couldn't find a feasible solution"<<endl;}
     else {
-        prt(solution.transpose())
+        //prt(solution.transpose())
         jerk_vector_x = solution.segment(0,horizon_size_);
         jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
     }
@@ -409,7 +419,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
     //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
 
     all_violations_ =CI*solution + ci0;
-    prt((CI*solution + ci0).transpose())
+    //prt((CI*solution + ci0).transpose())
 
 }
 
