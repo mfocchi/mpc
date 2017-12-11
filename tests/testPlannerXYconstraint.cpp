@@ -164,7 +164,7 @@ prt(zmpLimX.max.transpose())
 
 
 ///*
-//COUPLED
+//COUPLED //matlab file plotTrajXYconstraintCoupledMPC
 LegDataMap<MPCPlanner::footState> feetStates;
 LegDataMap<double> feetValues;
 FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
