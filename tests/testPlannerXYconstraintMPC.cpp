@@ -100,7 +100,7 @@ initial_feet_y[RH] = initial_state_y(0) -1.0;
 if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPC
     /////old stuff rewritten with compute steps function
-    computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner, schedule);
+    computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner, schedule);
     myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
     viol = myPlanner.getConstraintViolation(feetStates);
     prt(jerk_x.transpose())
@@ -235,7 +235,7 @@ void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<do
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
                   MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule)
 {
-    computeSteps(Vector2d(distance/number_of_steps, 0.5), initial_feet_x, initial_feet_y,
+    computeSteps(Vector2d(distance/number_of_steps, 0.0), initial_feet_x, initial_feet_y,
             distance,  number_of_steps, horizon_size,
             feetStates,  footHolds,
             A,  b,  myPlanner, schedule);

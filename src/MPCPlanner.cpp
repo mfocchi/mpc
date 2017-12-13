@@ -91,6 +91,9 @@ void MPCPlanner::buildMatrix(const Matrix<double, 1,3> C_in, MatrixXd & state_ma
     state_matrix.resize(size,3);
     input_matrix.resize(size,size);
 
+    state_matrix.setZero();
+    input_matrix.setZero();
+
     D1 = C_in*A;
     D2 = C_in*B;
 

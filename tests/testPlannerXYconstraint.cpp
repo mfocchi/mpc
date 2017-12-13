@@ -50,7 +50,6 @@ newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2))
 
 
 double distance_per_step = distance/number_of_steps;
-double lateral_sway = 0.5;
 int step_knots = floor(horizon_size/number_of_steps);
 
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
@@ -177,16 +176,16 @@ for (int leg=0;leg<4;leg++){
 //initial values
 //the initial value of the zmp should be inside the initial polygon otherwise it does not find a solution!!
 //so be careful with initial values of com!
-feetValues[LF] = 0.1;
-feetValues[RF] = 0.2;
+feetValues[LF] = initial_state_x(0) + 0.1;
+feetValues[RF] = initial_state_x(0) + 0.2;
 feetValues[LH] = feetValues[LF] - 0.5;
-feetValues[RH] = feetValues[RF] -0.5;
+feetValues[RH] = feetValues[RF] - 0.5;
 
 //init y all the same
-feetStates[LF].y.setConstant(1.0);
-feetStates[RF].y.setConstant(-1.0);
-feetStates[LH].y.setConstant(1.0);
-feetStates[RH].y.setConstant(-1.0);
+feetStates[LF].y.setConstant(initial_state_y(0) + 1.0);
+feetStates[RF].y.setConstant(initial_state_y(0) -1.0);
+feetStates[LH].y.setConstant(initial_state_y(0) + 1.0);
+feetStates[RH].y.setConstant(initial_state_y(0) -1.0);
 
 start_phase_index = 0;
 phase_duration = step_knots/2; //10 samples both swing and phase
@@ -212,7 +211,8 @@ for (int i=0; i<number_of_steps;i++)
 
     //3 stance
     //step
-    feetValues[schedule.getCurrentSwing()]+= distance_per_step;
+    feetValues[schedule.getCurrentSwing()]+= distance_per_step;//there is no y change!
+
     //set swing for that leg
     feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
     feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValues[LF]);
