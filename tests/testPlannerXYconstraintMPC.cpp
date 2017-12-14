@@ -19,15 +19,15 @@ using namespace std;
 void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
                   const double distance, const int number_of_steps, const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule);
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner);
 
 
 void computeSteps(const Vector2d & userSpeed,
                   const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
                   const double distance, const int number_of_steps, const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule);
-
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, dog::LegID swing_leg_index,  Vector2d initialCoM = Vector2d::Zero());
+void printSwing(LegID swing);
 
 int main()
 {
@@ -51,14 +51,15 @@ Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
 VectorXd zmp_x, zmp_y, com_x, com_y, viol;
 MPCPlanner::BoxLimits zmpLimX, zmpLimY;
 MatrixXd A; VectorXd b;
-FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
+
+FootScheduler replanning_schedule; replanning_schedule.setSequence(LF, RH,RF,LH);
 
 int replanningFlag = true;
 double disturbance = 0.0;
 
 Vector2d userSpeed;
 userSpeed(0)=0.15;
-userSpeed(1)=0.2;
+userSpeed(1)=0.0;
 
 
 //get user input
@@ -71,6 +72,8 @@ newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1))
 newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
 newline::getInt("replanning? [0/1]:", replanningFlag, replanningFlag);
 newline::getDouble("disturbance:", disturbance, disturbance);
+newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
+newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
 
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 myPlanner.setWeights(weight_R, weight_Q);
@@ -100,7 +103,7 @@ initial_feet_y[RH] = initial_state_y(0) -1.0;
 if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPC
     /////old stuff rewritten with compute steps function
-    computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner, schedule);
+    computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
     myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
     viol = myPlanner.getConstraintViolation(feetStates);
     prt(jerk_x.transpose())
@@ -114,6 +117,7 @@ if (!replanningFlag){
     VectorXd com_xd, com_yd;
     myPlanner.computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
     myPlanner.computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
+
 
     myPlanner.saveTraj("jerk_x.txt", jerk_x);
     myPlanner.saveTraj("jerk_y.txt", jerk_y);
@@ -144,12 +148,12 @@ if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPCreplanning
 
     Vector3d  actual_state_x,actual_state_x1,actual_state_y;
-    int experiment_duration = 300;
+    int experiment_duration = 60;
     int replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
     prt(replanningWindow)
     int sample, sampleW = 0, replanningStage = 0;
     VectorXd jerk_disturbance; jerk_disturbance.resize(experiment_duration); jerk_disturbance.setZero();
-    LegID swing_leg_index;
+
     //init the state
     actual_state_x = initial_state_x;
     actual_state_y = initial_state_y;
@@ -162,27 +166,38 @@ if (!replanningFlag){
 
         if ((sample % replanningWindow) == 0){//do the replan
             replanningStage++;
+            std::cout<<"----------------------------------------------------------------------"<<std::endl;
             prt(replanningStage)
+
             if (sample>0)//when sample =0 the first time just use the initial value
             {
-                //update feet with the actual stance
                 for (int leg = 0; leg<4;leg++)
                 {
+                     //update feet with the actual stance
                     initial_feet_x[leg] = feetStates[leg].x(sampleW);
                     initial_feet_y[leg] = feetStates[leg].y(sampleW);
-                    if (feetStates[leg].swing(sampleW))
-                    {
-                        swing_leg_index = LegID(leg);
-                        prt(swing_leg_index)
-                    }
+                    //old
+
+                    //                if (feetStates[leg].swing(sampleW))
+                    //                {
+                    //                    swing_leg_index = LegID(leg);
+                    //                    prt(swing_leg_index)
+                    //                }
+
                 }
-                //find the swing leg in sampleW and update the schedule to that and do the step
-                schedule.setCurrentSwing(swing_leg_index);
-                schedule.next();
+                replanning_schedule.next();
             }
+
+            //find the swing leg in sampleW and update the schedule to that and do the step
             prt(initial_feet_x)
+            printSwing(replanning_schedule.getCurrentSwing());
             //recompute the new steps from the actual step
-            computeSteps(userSpeed, initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner, schedule);
+//            computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
+//                    number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
+//                    replanning_schedule.getCurrentSwing(), Vector2d(actual_state_x(0),actual_state_y(0)));
+            computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
+                    number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
+                    replanning_schedule.getCurrentSwing());
             //replan from the actual state and the new steps overwriting the jerk
             myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
             //reset the counter
@@ -193,9 +208,13 @@ if (!replanningFlag){
             //for the log compute the whole traj
             myPlanner.computeCOMtrajectory( actual_state_x, jerk_x, com_x);
             myPlanner.computeCOMtrajectory( actual_state_y, jerk_y, com_y);
+            myPlanner.computeZMPtrajectory( actual_state_x, jerk_x, zmp_x);
+            myPlanner.computeZMPtrajectory( actual_state_y, jerk_y, zmp_y);
 
             myPlanner.saveTraj("./replan/com_x"+to_string(replanningStage), com_x,false);
             myPlanner.saveTraj("./replan/com_y"+to_string(replanningStage), com_y,false);
+            myPlanner.saveTraj("./replan/zmp_x"+to_string(replanningStage), zmp_x,false);
+            myPlanner.saveTraj("./replan/zmp_y"+to_string(replanningStage), zmp_y,false);
 
             myPlanner.saveTraj("./replan/footHoldsLF"+to_string(replanningStage),  footHolds[LF].x, footHolds[LF].y,false);
             myPlanner.saveTraj("./replan/footHoldsRF"+to_string(replanningStage),  footHolds[RF].x, footHolds[RF].y,false);
@@ -212,7 +231,12 @@ if (!replanningFlag){
             myPlanner.saveTraj("./replan/swingLH"+to_string(replanningStage),  feetStates[LH].swing,false);
             myPlanner.saveTraj("./replan/swingRH"+to_string(replanningStage),  feetStates[RH].swing,false);
 
-
+            std::ofstream file;
+            file.open("./replan/exp_data");
+            file<<horizon_size <<" ";
+            file<<number_of_steps <<" ";
+            file<<experiment_duration <<std::endl;
+            file.close();
 
         } else {
             sampleW++;
@@ -233,23 +257,24 @@ if (!replanningFlag){
 void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
                   double distance, const int number_of_steps, const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule)
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner)
 {
     computeSteps(Vector2d(distance/number_of_steps, 0.0), initial_feet_x, initial_feet_y,
             distance,  number_of_steps, horizon_size,
             feetStates,  footHolds,
-            A,  b,  myPlanner, schedule);
+            A,  b,  myPlanner, LF);
 
 }
 
 
-void computeSteps(const Vector2d & userSpeed, const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
+void computeSteps(const Vector2d & userSpeed,  const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
                   double distance, const int number_of_steps, const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, FootScheduler & schedule)
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, dog::LegID swing_leg_index, Vector2d  initialCoM)
 {
 
-
+    FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
+    schedule.setCurrentSwing(swing_leg_index);
     int start_phase_index,  phase_duration, number_of_constraints;
     double distance_per_step = distance/number_of_steps;
     int step_knots = floor(horizon_size/number_of_steps);
@@ -267,11 +292,26 @@ void computeSteps(const Vector2d & userSpeed, const LegDataMap<double> & initial
     A.setZero();
     b.setZero();
 
+
     for (int leg=0;leg<4;leg++){
         feetStates[leg].resize(horizon_size);
         //set always stances
         feetStates[leg].swing.setConstant(horizon_size,false);
         footHolds[leg].resize(2*number_of_steps);
+
+    }
+
+
+    LegDataMap<bool> comCorrectionFlag = false;
+    LegDataMap<double> comCorrectionValue = 0.0;
+    if (!initialCoM.isZero(0))
+    {
+        comCorrectionFlag = true;
+        comCorrectionValue[LF] = initialCoM(rbd::Y) +1.0 - feetValuesY[LF];
+        comCorrectionValue[RF] = initialCoM(rbd::Y) -1.0 - feetValuesY[RF];
+        comCorrectionValue[LH] = initialCoM(rbd::Y) +1.0 - feetValuesY[LH];
+        comCorrectionValue[RH] = initialCoM(rbd::Y) -1.0 - feetValuesY[RH];
+        //prt(feetValuesY)
     }
 
     //prt(phase_duration)
@@ -297,9 +337,17 @@ void computeSteps(const Vector2d & userSpeed, const LegDataMap<double> & initial
 
         //3 stance/////////////////////////////////////
         //step
+        if (comCorrectionFlag[schedule.getCurrentSwing()])
+        {
+
+            //std::cout<< "correxcting com: " <<comCorrectionValue[schedule.getCurrentSwing()]<<std::endl;
+            feetValuesY[schedule.getCurrentSwing()]+= comCorrectionValue[schedule.getCurrentSwing()];
+            comCorrectionFlag[schedule.getCurrentSwing()] = false;
+        }
         //default stepping
         feetValuesX[schedule.getCurrentSwing()]+=  userSpeed(0); //old         feetValuesX[schedule.getCurrentSwing()]+= distance_per_step
         feetValuesY[schedule.getCurrentSwing()]+=  userSpeed(1); //old 0.1
+
 
         //set swing for that leg
         feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
@@ -340,6 +388,25 @@ void computeSteps(const Vector2d & userSpeed, const LegDataMap<double> & initial
     //prt(missing_knots)
 }
 
-
+void printSwing(LegID swing)
+{
+   switch(swing)
+   {
+    case LF:
+        std::cout<<"swing LF:"<<std::endl;
+        break;
+    case RF:
+        std::cout<<"swing RF:"<<std::endl;
+        break;
+    case LH:
+        std::cout<<"swing LH:"<<std::endl;
+        break;
+    case RH:
+        std::cout<<"swing RH:"<<std::endl;
+        break;
+    default:
+        break;
+   }
+}
 
 
