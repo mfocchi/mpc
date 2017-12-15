@@ -38,6 +38,7 @@ int main()
 int horizon_size = 200;//10 default for tests
 int number_of_steps = 20;
 double distance = 3.0;
+int experiment_duration = 60;
 
 double height = 0.5;
 double lateral_bound = 0.2;
@@ -55,6 +56,7 @@ MatrixXd A; VectorXd b;
 FootScheduler replanning_schedule; replanning_schedule.setSequence(LF, RH,RF,LH);
 
 int replanningFlag = true;
+int useComStepCorrection = true;
 double disturbance = 0.0;
 
 Vector2d userSpeed;
@@ -65,15 +67,22 @@ userSpeed(1)=0.0;
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
 newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
-newline::getDouble("weight R:", weight_R, weight_R);
-newline::getDouble("weight Q:", weight_Q, weight_Q);
-newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
-newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
-newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
+newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
+
+//newline::getDouble("weight R:", weight_R, weight_R);
+//newline::getDouble("weight Q:", weight_Q, weight_Q);
+//newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
+//newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
+//newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
 newline::getInt("replanning? [0/1]:", replanningFlag, replanningFlag);
 newline::getDouble("disturbance:", disturbance, disturbance);
 newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
+if (replanningFlag)
+{
+    newline::getInt("experiment_duration :", experiment_duration, experiment_duration);
+    newline::getInt("use com step correction? [0/1]:", useComStepCorrection, useComStepCorrection);
+}
 
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 myPlanner.setWeights(weight_R, weight_Q);
@@ -148,7 +157,7 @@ if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPCreplanning
 
     Vector3d  actual_state_x,actual_state_x1,actual_state_y;
-    int experiment_duration = 60;
+
     int replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
     prt(replanningWindow)
     int sample, sampleW = 0, replanningStage = 0;
@@ -158,7 +167,9 @@ if (!replanningFlag){
     actual_state_x = initial_state_x;
     actual_state_y = initial_state_y;
     //apply disturbance
-    jerk_disturbance.segment(4, 20 ).setConstant(disturbance);
+    jerk_disturbance.segment(4, experiment_duration-4 ).setConstant(disturbance);
+    myPlanner.saveTraj("./replan/jerk_disturbance",  jerk_disturbance,  false);
+
     //loop
     for (int sample = 0; sample<experiment_duration;sample++) //replanning iterations
     {
@@ -192,12 +203,16 @@ if (!replanningFlag){
             prt(initial_feet_x)
             printSwing(replanning_schedule.getCurrentSwing());
             //recompute the new steps from the actual step
-//            computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
-//                    number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
-//                    replanning_schedule.getCurrentSwing(), Vector2d(actual_state_x(0),actual_state_y(0)));
-            computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
-                    number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
-                    replanning_schedule.getCurrentSwing());
+            if (useComStepCorrection)
+            {
+                computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
+                        number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
+                        replanning_schedule.getCurrentSwing(), Vector2d(actual_state_x(0),actual_state_y(0)));
+            } else {
+                computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
+                        number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
+                        replanning_schedule.getCurrentSwing());
+            }
             //replan from the actual state and the new steps overwriting the jerk
             myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
             //reset the counter
@@ -248,7 +263,6 @@ if (!replanningFlag){
         myPlanner.computeCOMupdate(actual_state_y, jerk_y(sampleW) + jerk_disturbance(sample));
 
     }
-    myPlanner.saveTraj("./replan/jerk_disturbance",  jerk_disturbance,  false);
 
 }
 
@@ -300,7 +314,7 @@ void computeSteps(const Vector2d & userSpeed,  const LegDataMap<double> & initia
         footHolds[leg].resize(2*number_of_steps);
 
     }
-
+    prt(initialCoM(rbd::Y))
 
     LegDataMap<bool> comCorrectionFlag = false;
     LegDataMap<double> comCorrectionValue = 0.0;
@@ -311,7 +325,8 @@ void computeSteps(const Vector2d & userSpeed,  const LegDataMap<double> & initia
         comCorrectionValue[RF] = initialCoM(rbd::Y) -1.0 - feetValuesY[RF];
         comCorrectionValue[LH] = initialCoM(rbd::Y) +1.0 - feetValuesY[LH];
         comCorrectionValue[RH] = initialCoM(rbd::Y) -1.0 - feetValuesY[RH];
-        //prt(feetValuesY)
+
+        prt(feetValuesY)
     }
 
     //prt(phase_duration)
