@@ -426,6 +426,137 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 
 }
 
+void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
+                                          const Eigen::Vector3d & initial_state_x,
+                                          const Eigen::Vector3d & initial_state_y,
+                                          const  MatrixXd & A,  const  VectorXd & b,
+                                          const Eigen::Vector2d &targetSpeed,
+                                          Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y)
+{
+
+
+    this->height_ = actual_height;
+    Eigen::MatrixXd GQ, CI, CE, Zuc, Zxc, Zyc; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0, solution;
+    //build matrix
+    GQ.resize(2*horizon_size_,2*horizon_size_);
+    g0.resize(2*horizon_size_,1);
+    solution.resize(2*horizon_size_);
+
+    CI.resize(b.size(),2*horizon_size_); //max /min for all horizon
+    ci0.resize(b.size());
+
+    jerk_vector_x.resize(horizon_size_);
+    jerk_vector_y.resize(horizon_size_);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+
+    //Finds x that minimizes xddd^T * Q * xddd where xddd = [xddd_x, xddd_y]
+    g0.setZero();
+
+    //add the jerk term
+    Eigen::MatrixXd Gjerk;
+    Gjerk.resize(2*horizon_size_,2*horizon_size_);
+    Gjerk.setIdentity();
+    Gjerk*=weight_R;
+
+
+    //add the velocity term (set a constraint only on the last value of velocity
+    int window = horizon_size_;//horizon_size_
+    buildMatrix(Cv,Xvx,Xvu);
+    MatrixXd weightQv, Gv;
+    weightQv.resize(horizon_size_,horizon_size_);
+    weightQv.setIdentity();
+    weightQv  *= weight_Q*horizon_size_/window; //scale the importance with window size to make trhe costs comparable
+
+
+
+
+    VectorXd selectionVector;
+    MatrixXd selectionMatrix;
+    selectionVector.resize(horizon_size_);
+    selectionVector.setZero();
+    selectionVector.segment(horizon_size_-window, window) = VectorXd::Ones(window);
+    selectionMatrix.resize(horizon_size_,horizon_size_);
+    selectionMatrix = selectionVector.asDiagonal();
+    Gv.resize(2*horizon_size_,2*horizon_size_);Gv.setZero();
+    //to select from a matrix I need to left and right multiply for the selection matrix
+    Gv.block(0,0,horizon_size_,horizon_size_) = selectionMatrix* Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    Gv.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = selectionMatrix * Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    //prt(Gv)
+
+    Eigen::VectorXd bx, by, desiredSpeedVector,gv;
+    desiredSpeedVector.resize(horizon_size_);
+    bx.resize(horizon_size_);
+    by.resize(horizon_size_);
+    bx = Xvx*initial_state_x - desiredSpeedVector.setConstant(targetSpeed(rbd::X));
+    by = Xvx*initial_state_y - desiredSpeedVector.setConstant(targetSpeed(rbd::Y));
+    gv.resize(2*horizon_size_,1);gv.setZero();
+    //to select from a row vector I need to right multiply for the selection matrix
+    gv.segment(0,horizon_size_) = bx.transpose()*weightQv*Xvu*selectionMatrix;
+    gv.segment(horizon_size_,horizon_size_) = by.transpose()*weightQv*Xvu*selectionMatrix;
+    //prt(gv.transpose())
+
+    //add accel term
+    //add the velocity term (set a constraint only on the last value of velocity
+    buildMatrix(Ca,Xax,Xau);
+    MatrixXd weightQa, Ga;
+    weightQa.resize(horizon_size_,horizon_size_);
+    weightQa.setIdentity();
+    weightQa  *= weight_R;
+    Ga.resize(2*horizon_size_,2*horizon_size_);Ga.setZero();
+    Ga.block(0,0,horizon_size_,horizon_size_) = Xau.transpose()*weightQa*Xau;
+    Ga.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Xau.transpose()*weightQa*Xau;
+
+////////////
+
+    GQ = Gjerk + Gv;// + Ga; //Ga does not make difference
+    g0 = gv; //gjerk ga are zero cause we want to just miniminze their norm
+
+    ///////////////////////////////////////////////////
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //inequalities
+    //Zuc is block diagonal
+    Zuc.resize(2*horizon_size_,2*horizon_size_); Zuc.setZero();
+    Zuc.block(0,0,horizon_size_,horizon_size_) = Zu;
+    Zuc.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Zu;
+
+//    //Zxc, Zyc are columns
+    Zxc.resize(2*horizon_size_,3);Zxc.setZero();
+    Zxc.block(0,0,horizon_size_,3) = Zx;
+    Zyc.resize(2*horizon_size_,3);Zyc.setZero();
+    Zyc.block(horizon_size_,0,horizon_size_,3) = Zx;
+//
+
+    CI = A*Zuc;
+    ci0 = b + A*(Zxc*initial_state_x + Zyc*initial_state_y);
+
+
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+    else {
+        //prt(solution.transpose())
+        jerk_vector_x = solution.segment(0,horizon_size_);
+        jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
+    }
+    //costs
+    std::cout<<"jerk cost Cj: "<<0.5*solution.transpose()*Gjerk*solution <<std::endl;
+    std::cout<<"acc cost Ca: "<<0.5*solution.transpose()*Ga*solution <<std::endl ;
+    std::cout<<"vel cost Cv: "<<0.5*solution.transpose()*Gv*solution + gv.transpose()*solution<<std::endl;
+
+    //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
+
+    all_violations_ =CI*solution + ci0;
+    //prt((CI*solution + ci0).transpose())
+
+}
+
+
 
 
 void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool verbose)

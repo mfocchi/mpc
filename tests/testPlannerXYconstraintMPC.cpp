@@ -56,9 +56,11 @@ MatrixXd A; VectorXd b;
 FootScheduler replanning_schedule; replanning_schedule.setSequence(LF, RH,RF,LH);
 
 int replanningFlag = true;
+int optimizeVelocityFlag = true;
 int useComStepCorrection = true;
 double disturbance = 0.0;
 
+VectorXd com_xd, com_yd;
 Vector2d userSpeed;
 userSpeed(0)=0.15;
 userSpeed(1)=0.0;
@@ -72,6 +74,7 @@ newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
 //newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
 //newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
 newline::getInt("replanning? [0/1]:", replanningFlag, replanningFlag);
+newline::getInt("optimize velocity? [0/1]:", optimizeVelocityFlag, optimizeVelocityFlag);
 newline::getDouble("disturbance:", disturbance, disturbance);
 newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
@@ -110,18 +113,15 @@ if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPC
     /////old stuff rewritten with compute steps function
     computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
-
-
-
-    //    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
-    newline::getDouble("weight R:", weight_R, weight_R);
-    newline::getDouble("weight Q:", weight_Q, weight_Q);
-    myPlanner.setWeights(weight_R, weight_Q);
-
-    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
-
-
-
+    if (!optimizeVelocityFlag)
+          myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
+    else {
+        weight_R = 0.01; //gives good results
+        newline::getDouble("weight R:", weight_R, weight_R);
+        newline::getDouble("weight Q:", weight_Q, weight_Q);
+        myPlanner.setWeights(weight_R, weight_Q);
+        myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
+    }
     viol = myPlanner.getConstraintViolation(feetStates);
     prt(jerk_x.transpose())
     prt(jerk_y.transpose())
@@ -131,7 +131,6 @@ if (!replanningFlag){
     myPlanner.computeCOMtrajectory( initial_state_x, jerk_x, com_x);
     myPlanner.computeCOMtrajectory( initial_state_y, jerk_y, com_y);
 
-    VectorXd com_xd, com_yd;
     myPlanner.computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
     myPlanner.computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
 
@@ -222,7 +221,12 @@ if (!replanningFlag){
                         replanning_schedule.getCurrentSwing());
             }
             //replan from the actual state and the new steps overwriting the jerk
-            myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
+            if (!optimizeVelocityFlag)
+                myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
+            else {
+                weight_R = 0.01; myPlanner.setWeights(weight_R, weight_Q);
+                myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b, userSpeed, jerk_x,jerk_y);
+            }
             //reset the counter
             sampleW = 0;
 
@@ -234,8 +238,13 @@ if (!replanningFlag){
             myPlanner.computeZMPtrajectory( actual_state_x, jerk_x, zmp_x);
             myPlanner.computeZMPtrajectory( actual_state_y, jerk_y, zmp_y);
 
+            myPlanner.computeCOMtrajectory( actual_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
+            myPlanner.computeCOMtrajectory( actual_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
+
             myPlanner.saveTraj("./replan/com_x"+to_string(replanningStage), com_x,false);
             myPlanner.saveTraj("./replan/com_y"+to_string(replanningStage), com_y,false);
+            myPlanner.saveTraj("./replan/com_xd"+to_string(replanningStage), com_xd,false);
+            myPlanner.saveTraj("./replan/com_yd"+to_string(replanningStage), com_yd,false);
             myPlanner.saveTraj("./replan/zmp_x"+to_string(replanningStage), zmp_x,false);
             myPlanner.saveTraj("./replan/zmp_y"+to_string(replanningStage), zmp_y,false);
 
