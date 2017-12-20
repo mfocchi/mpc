@@ -78,6 +78,10 @@ class MPCPlanner
         void solveQPConstraintCoupled(const double actual_height, const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
                                       const  Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,  Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y);
 
+        void solveQPConstraintCoupled(const double actual_height, const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
+                                      const  Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,  const Eigen::Vector2d &targetSpeed, Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y);
+
+
         void  buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetStates, const int start_phase_index,
                                              const int phase_duration, const int horizon_size,
                                              Eigen::MatrixXd & A, Eigen::VectorXd & b, int & number_of_constraints );

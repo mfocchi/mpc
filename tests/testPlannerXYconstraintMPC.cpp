@@ -67,10 +67,7 @@ userSpeed(1)=0.0;
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
 newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
-newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
 
-//newline::getDouble("weight R:", weight_R, weight_R);
-//newline::getDouble("weight Q:", weight_Q, weight_Q);
 //newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
 //newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
 //newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
@@ -85,7 +82,7 @@ if (replanningFlag)
 }
 
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
-myPlanner.setWeights(weight_R, weight_Q);
+
 
 zmpLimX.resize(horizon_size);
 zmpLimY.resize(horizon_size);
@@ -113,7 +110,18 @@ if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPC
     /////old stuff rewritten with compute steps function
     computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
-    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
+
+
+
+    //    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
+    newline::getDouble("weight R:", weight_R, weight_R);
+    newline::getDouble("weight Q:", weight_Q, weight_Q);
+    myPlanner.setWeights(weight_R, weight_Q);
+
+    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
+
+
+
     viol = myPlanner.getConstraintViolation(feetStates);
     prt(jerk_x.transpose())
     prt(jerk_y.transpose())
