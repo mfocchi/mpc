@@ -431,7 +431,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
                                           const Eigen::Vector3d & initial_state_y,
                                           const  MatrixXd & A,  const  VectorXd & b,
                                           const Eigen::Vector2d &targetSpeed,
-                                          Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y)
+                                          Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y, int replanningWindow)
 {
 
 
@@ -464,15 +464,21 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 
 
     //add the velocity term (set a constraint only on the last value of velocity
-    int window = horizon_size_;//horizon_size_
+    int window = horizon_size_;//horizon_size_ //is the window where you enforce the velocity is good to set the whole horizon
     buildMatrix(Cv,Xvx,Xvu);
     MatrixXd weightQv, Gv;
     weightQv.resize(horizon_size_,horizon_size_);
-    weightQv.setIdentity();
-    weightQv  *= weight_Q*horizon_size_/window; //scale the importance with window size to make trhe costs comparable
-
-
-
+    if (replanningWindow ==1000)
+    {
+        prt("usig constant  weighting")
+        weightQv.setIdentity();
+        weightQv  *= weight_Q*horizon_size_/window;//scale the importance with window size to make trhe costs comparable
+    } else{
+        prt("usig impotance weighting")
+        //importance weight, make gaussian wise most important the weights at the end of the replanning window
+        weightQv = makeGaussian(horizon_size_, replanningWindow, replanningWindow).asDiagonal();
+        weightQv  *= weight_Q*horizon_size_; //to use the same weights cause the gaussian  integral is 1 and not horizon_size (e.g. as it would be as we have all ones)
+    }
 
     VectorXd selectionVector;
     MatrixXd selectionMatrix;
@@ -702,4 +708,17 @@ Eigen::VectorXd   MPCPlanner::getConstraintViolation(const iit::dog::LegDataMap<
 void MPCPlanner::computeCOMupdate(Eigen::Vector3d & actualCom, const double jerk_sample)
 {
     actualCom = A*actualCom + B*jerk_sample;
+}
+
+
+VectorXd MPCPlanner::makeGaussian(const int length, const int mean, const int stddev)
+{
+    VectorXd x, weight, arg;
+    x.resize(length);arg.resize(length);weight.resize(length);
+    x = VectorXd::LinSpaced(length, 1, length);
+
+    arg = -0.5 * ((x.array() - mean)/stddev).array().pow(2);
+
+    weight = arg.array().exp() / (std::sqrt(2*M_PI) * stddev);
+    return weight;
 }

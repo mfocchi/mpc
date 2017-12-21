@@ -120,6 +120,7 @@ if (!replanningFlag){
         newline::getDouble("weight R:", weight_R, weight_R);
         newline::getDouble("weight Q:", weight_Q, weight_Q);
         myPlanner.setWeights(weight_R, weight_Q);
+        //velocity is enforced at the end of the horizon
         myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
     }
     viol = myPlanner.getConstraintViolation(feetStates);
@@ -162,7 +163,6 @@ if (!replanningFlag){
 } else {
 
     //matlab file plotTrajXYconstraintCoupledMPCreplanning
-
     Vector3d  actual_state_x,actual_state_x1,actual_state_y;
 
     int replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
@@ -225,7 +225,7 @@ if (!replanningFlag){
                 myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
             else {
                 weight_R = 0.01; myPlanner.setWeights(weight_R, weight_Q);
-                myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b, userSpeed, jerk_x,jerk_y);
+                myPlanner.solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b, userSpeed, jerk_x,jerk_y, replanningWindow);
             }
             //reset the counter
             sampleW = 0;
