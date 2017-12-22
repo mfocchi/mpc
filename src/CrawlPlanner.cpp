@@ -150,7 +150,7 @@ void CrawlPlanner::starting(double time) {
     gl.actual_base.x = actual_ws_->getBasePosition_W();
     //reset desired linear position to actual readings
     gl.computeCoM(q_, qd_);
-    gl.des_base_pos.x = gl.actual_CoM.x;//com control
+    des_com_pos.x = gl.actual_CoM.x;//com control
     //reset desired orientation
     gl.des_base_orient.x(rbd::X) = gl.roll;
     gl.des_base_orient.x(rbd::Y) = gl.pitch;
@@ -183,6 +183,7 @@ void CrawlPlanner::run(double time,
 
     updateVarsForDataLogging();
 
+    //get actual states!
     bs->setPosition_W(actual_ws_->getBasePosition_W());
     bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
@@ -222,12 +223,25 @@ void CrawlPlanner::run(double time,
         planned_ws_.setJointEffort(0., joint_id);
     }
     //send the des_base_state (first do the orientation part)
+
+
     planned_ws_.setBaseRPY_W(gl.des_base_orient.x);
+    planned_ws_.setBaseRPYVelocity(gl.des_base_orient.xd);
+    planned_ws_.setBaseRPYAcceleration(gl.des_base_orient.xdd);
+
+    Matrix3d Rdes = commons::rpyToRot(gl.des_base_orient.x);
+    //compute the base reference from com reference
+    gl.des_base_pos.x = ROBOT::getBaseFromCoM(q_,gl.des_base_orient.x, des_com_pos.x, *gl.linksInertia, *gl.homogeneousTransforms);
+    rbd::Vector6D desComTwist; desComTwist <<  gl.des_base_orient.xd , des_com_pos.xd;
+    rbd::Vector6D desBaseTwist;
+    desBaseTwist =  ROBOT::motionVectorTransform(Rdes.transpose()*gl.offCoM, Matrix3d::Identity())  *
+                        (desComTwist - ROBOT::motionVectorTransform(Eigen::Vector3d(0,0,0), Rdes.transpose())*
+                        ROBOT::getWholeBodyCOMJacobian(*gl.linksInertia, *gl.homogeneousTransforms)*qd_ );
+    gl.des_base_pos.xd = rbd::linearPart(desBaseTwist);
+
     planned_ws_.setBasePosition_W(gl.des_base_pos.x);
-    planned_ws_.setBaseRPYVelocity_W(gl.des_base_orient.xd);
     planned_ws_.setBaseVelocity_W(gl.des_base_pos.xd);
-    planned_ws_.setBaseRPYAcceleration_W(gl.des_base_orient.xdd);
-    planned_ws_.setBaseAcceleration_W(gl.des_base_pos.xdd);
+    planned_ws_.setBaseAcceleration_W(gl.des_base_pos.xdd);//TODO accel
 
     //send the desired foot positions
     planned_ws_.setContactPosition_B("lf_foot", gl.footPosDes[LF]);
@@ -309,8 +323,6 @@ void CrawlPlanner::crawlStateMachine(double time)
 	            Vector3d target_pos, target_orient, delta_pos, delta_orient;
 
 	            //add the new value
-	            //alternative  WAY (TODO)
-	            //target_pos = gl.des_base_pos.x + comToBaryW;
 	            target_pos = gl.actual_CoM.x + new_triangle_baryW; //for dead reckoning we update the desired to the actual (no problems for IK cause is at the velocity level)
 
 	            //adapts orientation to terrain inclination
@@ -464,7 +476,7 @@ bool  CrawlPlanner::update_base_position(double time){
     stop_condition = baseTimer.isTimeElapsed(time);
     if (!stop_condition){
         //get feet reference to move base
-        gl.bodySpliner->getBodyPoint(time, gl.des_base_pos, gl.des_base_orient);
+        gl.bodySpliner->getBodyPoint(time, des_com_pos, gl.des_base_orient);
         //TODO remove
         gl.bodySpliner->getFeetPoint((double) planning_rate_, time, gl.stance_legs, des_q_, feet_intermediate);
         //computeIK from  feet reference
@@ -477,7 +489,7 @@ bool  CrawlPlanner::update_base_position(double time){
         //
 
         //in alternatuive
-        //gl.bodySpliner->updateFeetPoint(gl.des_base_pos.xd,gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
+        //gl.bodySpliner->updateFeetPoint(des_com_pos.xd,gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
         return false; //base is moving
     } else {
         baseTimer.resetTimer(); //reset timer for next state
@@ -540,8 +552,8 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
 void CrawlPlanner::update_phase_duration(double new_cycle_time){
     //total sum is 4
     base_motion_duration = new_cycle_time * 2.0/4.0;
-    swing_motion_duration = new_cycle_time * 3.8 / 4.0;
-    force_motion_duration = new_cycle_time * 2.1/4.0;
+    swing_motion_duration = new_cycle_time * 1.98 / 4.0;
+    force_motion_duration = new_cycle_time * 0.01/4.0;
     baseTimer.setDuration(base_motion_duration);
     forceTimer.setDuration(force_motion_duration);
     swingTimer.setDuration(swing_motion_duration);
