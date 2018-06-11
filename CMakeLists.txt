@@ -50,14 +50,19 @@ set_target_properties(crawl_planner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3")
 
 
 
+
 add_executable(testPlanner tests/testPlanner.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlanner   ${catkin_LIBRARIES})
 set_target_properties(testPlanner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
 add_executable(testPlannerXY tests/testPlannerXY.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXY   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")add_executable(testPlannerXYconstraint tests/testPlannerXYconstraint.cpp src/MPCPlanner.cpp)
+set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
+add_executable(testPlannerXYconstraint tests/testPlannerXYconstraint.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXYconstraint   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXYconstraint PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")add_executable(testPlannerXYconstraintMPC tests/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
+set_target_properties(testPlannerXYconstraint PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
+add_executable(testPlannerXYconstraintMPC tests/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXYconstraintMPC   ${catkin_LIBRARIES})
 set_target_properties(testPlannerXYconstraintMPC PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
