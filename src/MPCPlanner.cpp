@@ -8,6 +8,7 @@
 
 using namespace std;
 using namespace Eigen;
+using namespace iit::dog;
 using namespace iit;
 
 #define prt(x) std::cout << #x " = \n" << x << "\n" << std::endl;
@@ -643,7 +644,7 @@ void  MPCPlanner::buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetS
                                      Eigen::MatrixXd & A, Eigen::VectorXd & b, int & number_of_constraints )
 {
     std::vector<Vector3d> footCCwiseSorted;
-    std::vector<LineCoeff2d> lineCoeff;
+    std::vector<planning::LineCoeff2d> lineCoeff;
     int edgeCounter;
     if (phase_duration !=0)
     {
@@ -660,11 +661,11 @@ void  MPCPlanner::buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetS
         }
         lineCoeff.resize(edgeCounter);
         //sort the positions
-        CounterClockwiseSort(footCCwiseSorted);
+        planning::CounterClockwiseSort(footCCwiseSorted);
         //cycle along the ordered feet to compute the line coeff p*xcp + q*ycp  +r  > + stability_margin
         for(int edgeCounter = 0; edgeCounter<lineCoeff.size(); edgeCounter++){
             //compute the coeffs of the line between two feet
-            lineCoeff[edgeCounter] = iit::LineCoeff(footCCwiseSorted[edgeCounter],  footCCwiseSorted[(edgeCounter + 1) % lineCoeff.size()], true); //I set true to normalize and use stab margin
+            lineCoeff[edgeCounter] = planning::LineCoeff(footCCwiseSorted[edgeCounter],  footCCwiseSorted[(edgeCounter + 1) % lineCoeff.size()], true); //I set true to normalize and use stab margin
             //prt(footCCwiseSorted[edgeCounter].transpose())
         }
 

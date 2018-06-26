@@ -1,21 +1,16 @@
 #include <crawl_planner/CrawlPlanner.h>
 
+using namespace iit::dog;
 
 namespace dls_planner
 {
 
 CrawlPlanner::CrawlPlanner() {
     planner_name_ = "crawl_planner";
-
-    hyq2maxIK.reset(new InverseKinematicsHyQ2Max(planning_rate_));
-    hyqIK.reset(new InverseKinematicsHyQ(planning_rate_));
-
     //this is construct
     mySchedule.reset(new FootScheduler(iit::dog::RH, iit::dog::RF, iit::dog::LH, iit::dog::LF));
     stepHandler.reset(new StepHandler(gl));
     bodyTargetHandler.reset(new BodyTargetHandler);
-    slipRecovery.reset(new SlipRecovery());
-    bs.reset(new BaseState());
 }
 
 CrawlPlanner::~CrawlPlanner()
@@ -74,20 +69,6 @@ void CrawlPlanner::printCharOptions()
     std::cout << "- f to move forward " << std::endl;
 
 }
-//
-//void CrawlPlanner::charCB(const std_msgs::CharConstPtr& msg)
-//{
-//    std::string user_text(1, msg->data);
-//    std::cout << "Char Callback got " << user_text << std::endl;
-//    if(user_text == "f"){
-//        std::cout << "Walking Forward" << std::endl;
-//    }else if(user_text == "b"){
-//        std::cout << "Walking Backwards" << std::endl;
-//    }else{
-//        std::cout << "Not a valid option" << std::endl;
-//    }
-//}
-
 
 void CrawlPlanner::starting(double time) {
     std::cout << "Starting CrawlPlanner controller at " << time << " sec.";
@@ -95,10 +76,6 @@ void CrawlPlanner::starting(double time) {
     printCharOptions();
     //crawl init
     printf("chimney plan starting\n");
-
-    // Reading floating system properties
-
-
 
     //in the init there is not the state of the robot
     gl.param_file = ros::package::getPath(std::string("crawl_planner")) + "/config/planner.ini";
@@ -112,14 +89,16 @@ void CrawlPlanner::starting(double time) {
         qdd_(i) = 0.;
         tau_(i) = actual_ws_->joint_eff(joint_id);
     }
-    bs->setPosition_W(actual_ws_->getBasePosition_W());
+    bs->setPosition_W(actual_ws_->getBasePosition());
     bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
     bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
-    bs->setOrientation_W(actual_ws_->getBaseOrientation_W());
+    bs->setOrientation_W(actual_ws_->getBaseOrientation());
+    //compute torque limits according to the actual config of the robot
+    tau_max_ = robot_limits_->getTorqueLimits(q_);
 
     gl.init(q_, qd_, qdd_); //this sets also 	footPosDes = footPos;
-    gl.sl_to_eigenLogic(q_, qd_, tau_, qdd_, *bs);
+    gl.sl_to_eigenLogic(q_, qd_, tau_, tau_max_, qdd_, *bs);
     gl.setServoRate(planning_rate_);
     stepHandler->setSpeedParameters(0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.022, 0.022, 0.022);
     stepHandler->setSpeedVariation(true);
@@ -140,14 +119,14 @@ void CrawlPlanner::starting(double time) {
     prt(gl.cycle_time)
     update_phase_duration(gl.cycle_time);
     //step handler init
-    stepHandler->setHipDefaultYOffset(0.08 + fabs((gl.footPos[dog::LF] - stepHandler->getHipPosition(dog::LF))(rbd::Y)));
+    stepHandler->setHipDefaultYOffset(0.06 + fabs((gl.footPos[iit::dog::LF] - stepHandler->getHipPosition(q_,iit::dog::LF))(rbd::Y)));
     stepHandler->setDefaultStepLength((linearSpeedX * gl.cycle_time));
     //set des joints = actual
     gl.footPosDes = sample_footPosDes = gl.footPos;
     des_q_ = q_;
     des_qd_.setZero();
 
-    gl.actual_base.x = actual_ws_->getBasePosition_W();
+    gl.actual_base.x = actual_ws_->getBasePosition();
     //reset desired linear position to actual readings
     gl.computeCoM(q_, qd_);
     des_com_pos.x = gl.actual_CoM.x;//com control
@@ -184,13 +163,13 @@ void CrawlPlanner::run(double time,
     updateVarsForDataLogging();
 
     //get actual states!
-    bs->setPosition_W(actual_ws_->getBasePosition_W());
+    bs->setPosition_W(actual_ws_->getBasePosition());
     bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
     bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
-    bs->setOrientation_W(actual_ws_->getBaseOrientation_W());
+    bs->setOrientation_W(actual_ws_->getBaseOrientation());
 
-    gl.sl_to_eigenLogic(q_, qd_, tau_, qdd_, *bs);
+    gl.sl_to_eigenLogic(q_, qd_, tau_,tau_max_, qdd_, *bs);
     //com identification
     //for display purposes
     linearSpeedX_dsp = linearSpeedX*1000;
@@ -209,8 +188,10 @@ void CrawlPlanner::run(double time,
     //fills in the base and joints variables
     crawlStateMachine(time);
 
-    gl.computeIK(gl.footPosDes, gl.footVelDes, des_q_, des_qd_);
-
+    ik_->getJointState(gl.footPosDes,
+                       gl.footVelDes,
+                       des_q_, des_qd_, gl.useKinematicLimitsFlag,
+                       gl.endStopViolation);
 
     // Converting RobCoGen to WholeBodyState
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
@@ -225,23 +206,23 @@ void CrawlPlanner::run(double time,
     //send the des_base_state (first do the orientation part)
 
 
-    planned_ws_.setBaseRPY_W(gl.des_base_orient.x);
-    planned_ws_.setBaseRPYVelocity(gl.des_base_orient.xd);
-    planned_ws_.setBaseRPYAcceleration(gl.des_base_orient.xdd);
+    planned_ws_.setBaseRPY(gl.des_base_orient.x);
+    planned_ws_.setBaseRPYVelocity_W(gl.des_base_orient.xd);
+    planned_ws_.setBaseRPYAcceleration_W(gl.des_base_orient.xdd);
 
     Matrix3d Rdes = commons::rpyToRot(gl.des_base_orient.x);
     //compute the base reference from com reference
-    gl.des_base_pos.x = ROBOT::getBaseFromCoM(q_,gl.des_base_orient.x, des_com_pos.x, *gl.linksInertia, *gl.homogeneousTransforms);
+    gl.des_target_pos.x = dog::getBaseFromCoM(q_,gl.des_base_orient.x, des_com_pos.x, *gl.linksInertia);
     rbd::Vector6D desComTwist; desComTwist <<  gl.des_base_orient.xd , des_com_pos.xd;
     rbd::Vector6D desBaseTwist;
-    desBaseTwist =  ROBOT::motionVectorTransform(Rdes.transpose()*gl.offCoM, Matrix3d::Identity())  *
-                        (desComTwist - ROBOT::motionVectorTransform(Eigen::Vector3d(0,0,0), Rdes.transpose())*
-                        ROBOT::getWholeBodyCOMJacobian(*gl.linksInertia, *gl.homogeneousTransforms)*qd_ );
-    gl.des_base_pos.xd = rbd::linearPart(desBaseTwist);
+    desBaseTwist =  dog::motionVectorTransform(Rdes.transpose()*gl.offCoM, Matrix3d::Identity())  *
+                        (desComTwist - dog::motionVectorTransform(Eigen::Vector3d(0,0,0), Rdes.transpose())*
+                        dog::getWholeBodyCOMJacobian(q_, *gl.linksInertia, *gl.homogeneousTransforms)*qd_ );
+    gl.des_target_pos.xd = rbd::linearPart(desBaseTwist);
 
-    planned_ws_.setBasePosition_W(gl.des_base_pos.x);
-    planned_ws_.setBaseVelocity_W(gl.des_base_pos.xd);
-    planned_ws_.setBaseAcceleration_W(gl.des_base_pos.xdd);//TODO accel
+    planned_ws_.setBasePosition(gl.des_target_pos.x);
+    planned_ws_.setBaseVelocity_W(gl.des_target_pos.xd);
+    planned_ws_.setBaseAcceleration_W(gl.des_target_pos.xdd);//TODO accel
 
     //send the desired foot positions
     planned_ws_.setContactPosition_B("lf_foot", gl.footPosDes[LF]);
@@ -346,11 +327,8 @@ void CrawlPlanner::crawlStateMachine(double time)
     case(unloadleg):
 								        if (forceTimer.resetFlag) {
 								            std::cout <<"unload leg"<<std::endl;
-								            //get actual value of the force
-								            rbd::Vector3d Fleg;
-								            Fleg = gl.feetForces.segment(swing_leg_index*dog::contactConstrCount,3);
 								            //project on the normal (versor) using dot product
-								            forceLimSpliner.setBoundary(time, force_motion_duration, gl.vec_incl[swing_leg_index].dot(Fleg), 5);
+                                            forceLimSpliner.setBoundary(time, force_motion_duration, gl.vec_incl[swing_leg_index].dot(gl.feetForces[swing_leg_index]), 5);
 								            forceTimer.startTimer(time);
 								        }
     if(update_load_force(swing_leg_index, time)){
@@ -378,10 +356,10 @@ void CrawlPlanner::crawlStateMachine(double time)
 	            //prt(swing_leg_index)
 	            //sample actual position to apply the spline from
 	            sample_footPosDes = gl.footPosDes; //otherwise since you have the PD in the static case you can have discontinuities
-	            double step_x = 0.0;double step_y = 0.0;
+	            double step_x = 0.0;double step_y = 0.0;    
+                stepHandler->computeStepLength(q_, swing_leg_index,  gl.footPos, linearSpeedX, linearSpeedY, headingSpeed, step_x, step_y); //compute the step length in the base frame and updates the cycle duration
 
-	            stepHandler->computeStepLength(swing_leg_index,  gl.footPos, linearSpeedX, linearSpeedY, headingSpeed, step_x, step_y); //compute the step length in the base frame
-	            footSpliner[swing_leg_index].setSplineParameters(time,  swing_motion_duration, gl.vec_incl[swing_leg_index], sample_footPosDes[swing_leg_index],  gl.R, step_x, step_y, step_height);
+                footSpliner[swing_leg_index].setSplineParameters(time,  swing_motion_duration, gl.vec_incl[swing_leg_index], sample_footPosDes[swing_leg_index],  gl.R, step_x, step_y, step_height);
 
 	            //for stairs
 	            //					ictp_mode = true;
@@ -454,12 +432,12 @@ void CrawlPlanner::computeTerrainEstimation()
     terrainEstimator.setBaseAngles(bs->getRoll_W(), bs->getPitch_W());
     terrainEstimator.setForceThreshold(20);
     terrainEstimator.setFilter((double)1/planning_rate_, 0.1);
-    terrainEstimator.setFootForcesBF(gl.grForces[dog::LF](rbd::Z),gl.grForces[dog::RF](rbd::Z),gl.grForces[dog::LH](rbd::Z),gl.grForces[dog::RH](rbd::Z));
+    terrainEstimator.setGroundReactionForcesBF(gl.grForces[dog::LF](rbd::Z),gl.grForces[dog::RF](rbd::Z),gl.grForces[dog::LH](rbd::Z),gl.grForces[dog::RH](rbd::Z));
     Eigen::Matrix<double, 3,4> feetPosition;
     feetPosition << gl.footPos[dog::LF](rbd::X),gl.footPos[dog::RF](rbd::X),gl.footPos[dog::LH](rbd::X),gl.footPos[dog::RH](rbd::X),
             gl.footPos[dog::LF](rbd::Y),gl.footPos[dog::RF](rbd::Y),gl.footPos[dog::LH](rbd::Y),gl.footPos[dog::RH](rbd::Y),
             gl.footPos[dog::LF](rbd::Z),gl.footPos[dog::RF](rbd::Z),gl.footPos[dog::LH](rbd::Z),gl.footPos[dog::RH](rbd::Z);
-    terrainEstimator.setFootPositionsBF(feetPosition);
+    terrainEstimator.setLegContactPositionsBF(feetPosition);
     if (roughTerrainFlag){
         terrainEstimator.ComputeTerrainEstimationRoughTerrain(gl.terr_normal, gl.terrRoll, gl.terrPitch);
     }
@@ -526,19 +504,20 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
     if (!hapticCrawl){
         stop_condition = swingTimer.isTimeElapsed(time); //nohaptic
     } else {
-        iit::ROBOT::Jacobians jacdes(*gl.default_pg);
-        iit::dog::LegDataMap< Eigen::Matrix<double, 6,3 >* > JFootDes;
-        JFootDes[LF] =  &jacdes.fr_trunk_J_LF_foot;// just a simpler alias
-        JFootDes[RF] =  &jacdes.fr_trunk_J_RF_foot;// just a simpler alias
-        JFootDes[LH] =  &jacdes.fr_trunk_J_LH_foot;// just a simpler alias
-        JFootDes[RH] =  &jacdes.fr_trunk_J_RH_foot;// just a simpler alias
-        jacdes.fr_trunk_J_LF_foot(des_q_);
-        jacdes.fr_trunk_J_RF_foot(des_q_);
-        jacdes.fr_trunk_J_LH_foot(des_q_);
-        jacdes.fr_trunk_J_RH_foot(des_q_);
-        //prt(des_q_.transpose())
-        stop_condition = footSpliner[swing_leg_index].check_stop_condition( (*JFootDes[swing_leg_index]).block<3,3>(rbd::LX,0) , gl.grForces[swing_leg_index], force_th);
+        iit::dog::LegDataMap<FootJac > JFootDes;
+        JFootDes[LF] = gl.feet_jacobians_->getFootJacobian(des_q_,LF);
+        JFootDes[RF] = gl.feet_jacobians_->getFootJacobian(des_q_,RF);
+        JFootDes[LH] = gl.feet_jacobians_->getFootJacobian(des_q_,LH);
+        JFootDes[RH] = gl.feet_jacobians_->getFootJacobian(des_q_,RH);
+
+        double sigma_ws_limit;
+        sigma_ws_limit = 0.009; //this is good also for hyqreal
+
+        //verify if there is any endstop force and discart triggering with force in that case (do not consider it for knee joint! otherwise if the sigma is different for each robot it will not stop)
+        bool jointLimitsHit = (gl.endStopViolation[toJointID(swing_leg_index, iit::dog::HAA)]|| gl.endStopViolation[toJointID(swing_leg_index, iit::dog::HFE)]);
+        stop_condition = footSpliner[swing_leg_index].check_stop_condition(jointLimitsHit, JFootDes[swing_leg_index], sigma_ws_limit, gl.grForces[swing_leg_index], force_th);
     }
+
     if (stop_condition){
         //prt("swingstoped")
         swingTimer.resetTimer();
@@ -571,11 +550,11 @@ void CrawlPlanner::start_crawl(void)
         //prt(mySchedule->getCurrentSwing())
         std::cout<<"Crawl started"<<std::endl;
 
-        bs->setPosition_W(actual_ws_->getBasePosition_W());
+        bs->setPosition_W(actual_ws_->getBasePosition());
         bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
         bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
         bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
-        bs->setOrientation_W(actual_ws_->getBaseOrientation_W());
+        bs->setOrientation_W(actual_ws_->getBaseOrientation());
         gl.footPosDes = sample_footPosDes = gl.footPos;
     }
 }

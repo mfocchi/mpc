@@ -13,6 +13,7 @@
 
 using namespace Eigen;
 using namespace std;
+using namespace iit::dog;
 #define prt(x) std::cout << #x " = \n" << x << "\n" << std::endl;
 
 int main()

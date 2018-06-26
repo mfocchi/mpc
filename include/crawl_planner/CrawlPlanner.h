@@ -16,17 +16,8 @@
 #include <math.h>
 
 //Includes
-#include <iit/robots/hyq/default_parameters_getter.h>
-#include <iit/robots/hyq/jacobians.h>
-#include <iit/robots/hyq2max/default_parameters_getter.h>
-#include <iit/robots/hyq2max/jacobians.h>
-#include <iit/robots/hyq/transforms.h>
 #include <iit/rbd/utils.h>
 
-//IK
-#include <hyq2max_ik/ik.h>
-#include <hyq2max_ik/RobotLengths.h>
-#include <hyq_ik/ik.h>
 
 #include <dls_planner/Planner.h>
 #include <dls_planner/PlannerBase.h>
@@ -39,12 +30,6 @@
 #include <crawl_controller/task_globals.h>
 #include <crawl_controller/StepHandler.h>
 #include <crawl_controller/BodyTargetHandler.h>
-#include <crawl_controller/TrunkController.h>
-#include <crawl_controller/TrunkIdentification.h>
-#include <crawl_controller/SlipRecovery.h>
-
-
-
 
 namespace dls_planner
 {
@@ -87,7 +72,6 @@ protected:
     /** @brief Joint id mapping between urdf to robcogen */
     std::vector<unsigned int> joint_id_map_;
 
-
     //Joint state
     dog::JointState des_tau_;
     dog::JointState des_q_;
@@ -98,15 +82,9 @@ protected:
     dog::JointState qdd_;
     dog::JointState tau_;
 
-
     dog::LegDataMap<rbd::Vector3d> jointDesPos;
     dog::LegDataMap<rbd::Vector3d> jointDesVel;
     dog::LegDataMap<rbd::Vector3d> jointDesAcc;
-
-    ///IK
-    RobotLengths rl;
-    std::shared_ptr<InverseKinematicsHyQ2Max> hyq2maxIK;
-    std::shared_ptr<InverseKinematicsHyQ>     hyqIK;
 
     //crawl
     bool update_base_position(double time);
@@ -128,12 +106,10 @@ protected:
 
     //objects
     TaskGlobals gl;
-    //std::shared_ptr<FastCrawler> fastCrawler;
     std::shared_ptr<StepHandler>  stepHandler;
     std::shared_ptr<BodyTargetHandler> bodyTargetHandler;
-    std::shared_ptr<SlipRecovery > slipRecovery;
     std::shared_ptr<BaseState > bs;
-    iit::ROBOT::WholeBodyOptimization::ConstrViolation constr_viol;
+    iit::dog::WholeBodyOptimization::ConstrViolation constr_viol;
     CTerrainEstimator terrainEstimator;
 
 
@@ -180,11 +156,11 @@ protected:
     //spliners
     iit::commons::FifthOrderPolySpliner forceLimSpliner;
     commons::FifthOrderPolySpliner::Point force_start, force_end, force_intermediate;
-    dog::LegDataMap<iit::Point3d> feet_intermediate;
-    dog::LegDataMap<ROBOT::FootSpliner> footSpliner;
+    dog::LegDataMap<iit::planning::Point3d> feet_intermediate;
+    dog::LegDataMap<dog::FootSpliner> footSpliner;
     Timer baseTimer, forceTimer, swingTimer;
     std::shared_ptr<FootScheduler>  mySchedule;
-    iit::Point3d des_com_pos;
+    iit::planning::Point3d des_com_pos;
     //timers
     double base_motion_duration;
     double swing_motion_duration;

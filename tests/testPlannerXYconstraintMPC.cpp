@@ -12,8 +12,12 @@
 #include <stdlib.h>
 #include <crawl_planner/FootScheduler.h> //TODO fix this
 
+
 using namespace Eigen;
 using namespace std;
+using namespace iit::dog;
+
+
 #define prt(x) std::cout << #x " = \n" << x << "\n" << std::endl;
 
 void computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
@@ -113,9 +117,11 @@ if (!replanningFlag){
     //matlab file plotTrajXYconstraintCoupledMPC
     /////old stuff rewritten with compute steps function
     computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
-    if (!optimizeVelocityFlag)
+    if (!optimizeVelocityFlag){
           myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
-    else {
+    	prt(A)
+    	prt(b)
+    }else {
         weight_R = 0.01; //gives good results
         newline::getDouble("weight R:", weight_R, weight_R);
         newline::getDouble("weight Q:", weight_Q, weight_Q);

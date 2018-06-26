@@ -15,7 +15,8 @@
 
 #include <crawl_planner/eiquadprog.hpp>
 #include <iit/commons/dog/leg_data_map.h>
-#include <crawl_controller/robotSpecifics.h> //this is for linecoeffd
+#include <iit/commons/planning/planning.h> //this is for linecoeffd
+#include <iit/rbd/rbd.h>
 
 class MPCPlanner
 {

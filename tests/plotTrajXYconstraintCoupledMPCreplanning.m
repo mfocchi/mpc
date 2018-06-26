@@ -79,7 +79,7 @@ for plan=1:replanning_stages
         ylim([0,1.1])
         ylabel('swing leg')
         legend('LF','RF','LH','RH')
-        pause(0.1)
+        pause(0.4)
         drawnow
         
          delete(com_handle); %this deletes the handle
