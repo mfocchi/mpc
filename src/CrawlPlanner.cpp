@@ -210,7 +210,11 @@ void CrawlPlanner::run(double time,
     planned_ws_.setBaseRPYAcceleration_W(gl.des_base_orient.xdd);
 
     Matrix3d Rdes = commons::rpyToRot(gl.des_base_orient.x);
-    //compute the base reference from com reference
+    //compute the base frame version of des_com for plotting reasons
+    des_com_posB.x = gl.R * des_com_pos.x;
+    des_com_posB.xd = gl.R * des_com_pos.xd;
+
+    //compute the base reference from com reference, (des_target_pos is the base)
     gl.des_target_pos.x = dog::getBaseFromCoM(q_,gl.des_base_orient.x, des_com_pos.x, *gl.linksInertia);
     rbd::Vector6D desComTwist; desComTwist <<  gl.des_base_orient.xd , des_com_pos.xd;
     rbd::Vector6D desBaseTwist;

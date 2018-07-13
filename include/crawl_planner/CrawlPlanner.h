@@ -167,7 +167,7 @@ protected:
     dog::LegDataMap<dog::FootSpliner> footSpliner;
     Timer baseTimer, forceTimer, swingTimer;
     std::shared_ptr<FootScheduler>  mySchedule;
-    iit::planning::Point3d des_com_pos;
+    iit::planning::Point3d des_com_pos, des_com_posB;
     //timers
     double base_motion_duration;
     double swing_motion_duration;
