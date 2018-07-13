@@ -59,7 +59,16 @@ public:
     /** @brief Stopping procedure of the planner */
     void kill();
 
-
+    void setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet_jacs,
+                                         std::shared_ptr<iit::dog::ForwardKinematics>& fwd_kin,
+                                         std::shared_ptr<iit::dog::ShinJacobians>& shin_jacs,
+                                         std::shared_ptr<iit::dog::InertiaPropertiesBase> &inertia_props,
+                                         std::shared_ptr<iit::dog::HomogeneousTransformsBase> &hom_transforms,
+                                         std::shared_ptr<iit::dog::JSIMBase> &jsim,
+                                         std::shared_ptr<iit::dog::InverseDynamicsBase> &inv_dyn,
+                                         std::shared_ptr<iit::dog::KinDynParams> &params,
+                                         std::shared_ptr<iit::dog::LimitsBase> & limits,
+                                         std::shared_ptr<iit::dog::FeetContactForces> & feet_forces);
 protected:
 
 
@@ -69,8 +78,6 @@ protected:
     /** @brief Number of joints */
     unsigned int num_joints_;
 
-    /** @brief Joint id mapping between urdf to robcogen */
-    std::vector<unsigned int> joint_id_map_;
 
     //Joint state
     dog::JointState des_tau_;
@@ -101,6 +108,7 @@ protected:
 
     void computeTerrainEstimation();
     void printCharOptions();
+
     //void changeCrawlParams(); TODO
     //void stop_crawl();
 
@@ -109,7 +117,6 @@ protected:
     std::shared_ptr<StepHandler>  stepHandler;
     std::shared_ptr<BodyTargetHandler> bodyTargetHandler;
     std::shared_ptr<BaseState > bs;
-    iit::dog::WholeBodyOptimization::ConstrViolation constr_viol;
     CTerrainEstimator terrainEstimator;
 
 

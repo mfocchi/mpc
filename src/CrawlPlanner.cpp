@@ -11,6 +11,7 @@ CrawlPlanner::CrawlPlanner() {
     mySchedule.reset(new FootScheduler(iit::dog::RH, iit::dog::RF, iit::dog::LH, iit::dog::LF));
     stepHandler.reset(new StepHandler(gl));
     bodyTargetHandler.reset(new BodyTargetHandler);
+    bs.reset(new BaseState());
 }
 
 CrawlPlanner::~CrawlPlanner()
@@ -22,32 +23,9 @@ bool CrawlPlanner::init()
 {
     printf(BLUE "Initialization of the CrawlPlanner\n" COLOR_RESET);
 
-    des_q_.resize(12);
-    des_qd_.resize(12);
-    des_qdd_.resize(12);
-    des_tau_.resize(12);
-    q_.resize(12);
-    qd_.resize(12);
-    tau_.resize(12);
-
     addConsoleFunction("startCrawl",
                        "crawl on with virtual model on",
                        &CrawlPlanner::start_crawl, this);
-
-    joint_id_map_.resize(fbs_->getJointDoF());
-    joint_id_map_[dog::LF_HAA] = fbs_->getJointId("lf_haa_joint");
-    joint_id_map_[dog::LF_HFE] = fbs_->getJointId("lf_hfe_joint");
-    joint_id_map_[dog::LF_KFE] = fbs_->getJointId("lf_kfe_joint");
-    joint_id_map_[dog::RF_HAA] = fbs_->getJointId("rf_haa_joint");
-    joint_id_map_[dog::RF_HFE] = fbs_->getJointId("rf_hfe_joint");
-    joint_id_map_[dog::RF_KFE] = fbs_->getJointId("rf_kfe_joint");
-    joint_id_map_[dog::LH_HAA] = fbs_->getJointId("lh_haa_joint");
-    joint_id_map_[dog::LH_HFE] = fbs_->getJointId("lh_hfe_joint");
-    joint_id_map_[dog::LH_KFE] = fbs_->getJointId("lh_kfe_joint");
-    joint_id_map_[dog::RH_HAA] = fbs_->getJointId("rh_haa_joint");
-    joint_id_map_[dog::RH_HFE] = fbs_->getJointId("rh_hfe_joint");
-    joint_id_map_[dog::RH_KFE] = fbs_->getJointId("rh_kfe_joint");
-
     //init crawl state machine
     state_machine = idle;
 
@@ -57,6 +35,8 @@ bool CrawlPlanner::init()
 
     num_joints_ = fbs_->getJointDoF();
     planned_ws_.setJointDoF(num_joints_);
+
+    printf(BLUE "Initialization of the CrawlPlanner accomplished\n" COLOR_RESET);
 
     return true;
 }
@@ -73,7 +53,7 @@ void CrawlPlanner::printCharOptions()
 void CrawlPlanner::starting(double time) {
     std::cout << "Starting CrawlPlanner controller at " << time << " sec.";
     std::cout << std::endl;
-    printCharOptions();
+    //printCharOptions();
     //crawl init
     printf("chimney plan starting\n");
 
@@ -83,12 +63,15 @@ void CrawlPlanner::starting(double time) {
     //this is stuff that needs the first state to arrive...
     //	// Converting WholeBodyState to RobCoGen
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
-        unsigned int joint_id = joint_id_map_[i];
+        // Getting the joint id
+        unsigned int joint_id = getDWLJointId(JointIdentifiers(i));
+        // Converting the desired joint states from RobCoGen order
         q_(i) = actual_ws_->joint_pos(joint_id);
         qd_(i) = actual_ws_->joint_vel(joint_id);
         qdd_(i) = 0.;
         tau_(i) = actual_ws_->joint_eff(joint_id);
     }
+
     bs->setPosition_W(actual_ws_->getBasePosition());
     bs->setVelocity_W(actual_ws_->getBaseVelocity_W());
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
@@ -96,6 +79,8 @@ void CrawlPlanner::starting(double time) {
     bs->setOrientation_W(actual_ws_->getBaseOrientation());
     //compute torque limits according to the actual config of the robot
     tau_max_ = robot_limits_->getTorqueLimits(q_);
+
+
 
     gl.init(q_, qd_, qdd_); //this sets also 	footPosDes = footPos;
     gl.sl_to_eigenLogic(q_, qd_, tau_, tau_max_, qdd_, *bs);
@@ -117,7 +102,7 @@ void CrawlPlanner::starting(double time) {
     headingSpeed = gl.config_.get<double>("Crawl.headingSpeed");
     gl.cycle_time = gl.config_.get<double>("Crawl.cycle_time");
     prt(gl.cycle_time)
-    update_phase_duration(gl.cycle_time);
+            update_phase_duration(gl.cycle_time);
     //step handler init
     stepHandler->setHipDefaultYOffset(0.06 + fabs((gl.footPos[iit::dog::LF] - stepHandler->getHipPosition(q_,iit::dog::LF))(rbd::Y)));
     stepHandler->setDefaultStepLength((linearSpeedX * gl.cycle_time));
@@ -140,7 +125,7 @@ void CrawlPlanner::starting(double time) {
     gl.frame_change = true;
     gl.terr_normal = Vector3d(0,0,1.0);
 
-    prt(mySchedule->getCurrentSwing())
+   prt(mySchedule->getCurrentSwing())
     printf("finished starting\n");
 }
 
@@ -148,17 +133,26 @@ void CrawlPlanner::starting(double time) {
 void CrawlPlanner::run(double time,
         double period) {
 
-    //crawl run
-    // Converting WholeBodyState to RobCoGen
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
-        unsigned int joint_id = joint_id_map_[i];
-
-        // Converting the actual whole-body states
+        // Getting the joint id
+        unsigned int joint_id = getDWLJointId(JointIdentifiers(i));
+        // Converting the desired joint states from RobCoGen order
         q_(i) = actual_ws_->joint_pos(joint_id);
         qd_(i) = actual_ws_->joint_vel(joint_id);
         qdd_(i) = 0.;
         tau_(i) = actual_ws_->joint_eff(joint_id);
     }
+    //get grfs
+    feet_forces_->getFeetGRF(q_,
+                             qd_,
+                             tau_,
+                             bs->getOrientation_W(),
+                             gl.grForces,
+                             qdd_,
+                             bs->getVelocity_B(),
+                             Vector3d::Zero(),
+                             bs->getRotationRate_B(),
+                             Vector3d::Zero());
 
     updateVarsForDataLogging();
 
@@ -188,14 +182,18 @@ void CrawlPlanner::run(double time,
     //fills in the base and joints variables
     crawlStateMachine(time);
 
+    //map com motion into feet motion
+    gl.bodySpliner->updateFeetPoint(des_com_pos.xd, gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
+    //map feet motion into joint motion
     ik_->getJointState(gl.footPosDes,
                        gl.footVelDes,
                        des_q_, des_qd_, gl.useKinematicLimitsFlag,
                        gl.endStopViolation);
 
-    // Converting RobCoGen to WholeBodyState
+
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
-        unsigned int joint_id = joint_id_map_[i];
+        // Getting the joint id
+        unsigned int joint_id = getDWLJointId(JointIdentifiers(i));
         // Converting the actual whole-body states
         planned_ws_.setJointPosition(des_q_(i), joint_id);
         planned_ws_.setJointVelocity(des_qd_(i), joint_id);
@@ -203,6 +201,7 @@ void CrawlPlanner::run(double time,
         //no torques are sent
         planned_ws_.setJointEffort(0., joint_id);
     }
+
     //send the des_base_state (first do the orientation part)
 
 
@@ -225,28 +224,29 @@ void CrawlPlanner::run(double time,
     planned_ws_.setBaseAcceleration_W(gl.des_target_pos.xdd);//TODO accel
 
     //send the desired foot positions
-    planned_ws_.setContactPosition_B("lf_foot", gl.footPosDes[LF]);
-    planned_ws_.setContactPosition_B("rf_foot", gl.footPosDes[RF]);
-    planned_ws_.setContactPosition_B("lh_foot", gl.footPosDes[LH]);
-    planned_ws_.setContactPosition_B("rh_foot", gl.footPosDes[RH]);
+    planned_ws_.setContactPosition_B("01_lf_foot", gl.footPosDes[LF]);
+    planned_ws_.setContactPosition_B("02_rf_foot", gl.footPosDes[RF]);
+    planned_ws_.setContactPosition_B("03_lh_foot", gl.footPosDes[LH]);
+    planned_ws_.setContactPosition_B("04_rh_foot", gl.footPosDes[RH]);
 
     //send the desired foot velocities
-    planned_ws_.setContactVelocity_B("lf_foot", gl.footVelDes[LF]);
-    planned_ws_.setContactVelocity_B("rf_foot", gl.footVelDes[RF]);
-    planned_ws_.setContactVelocity_B("lh_foot", gl.footVelDes[LH]);
-    planned_ws_.setContactVelocity_B("rh_foot", gl.footVelDes[RH]);
+    planned_ws_.setContactVelocity_B("01_lf_foot", gl.footVelDes[LF]);
+    planned_ws_.setContactVelocity_B("02_rf_foot", gl.footVelDes[RF]);
+    planned_ws_.setContactVelocity_B("03_lh_foot", gl.footVelDes[LH]);
+    planned_ws_.setContactVelocity_B("04_rh_foot", gl.footVelDes[RH]);
 
     //send the desired stance legs
-    planned_ws_.setContactCondition("lf_foot",gl.stance_legs[LF]);
-    planned_ws_.setContactCondition("rf_foot",gl.stance_legs[RF]);
-    planned_ws_.setContactCondition("lh_foot",gl.stance_legs[LH]);
-    planned_ws_.setContactCondition("rh_foot",gl.stance_legs[RH]);
+    planned_ws_.setContactCondition("01_lf_foot",gl.stance_legs[LF]);
+    planned_ws_.setContactCondition("02_rf_foot",gl.stance_legs[RF]);
+    planned_ws_.setContactCondition("03_lh_foot",gl.stance_legs[LH]);
+    planned_ws_.setContactCondition("04_rh_foot",gl.stance_legs[RH]);
 
     //std::cout << "Running the planning loop at " << 1 / period << " Hz" << std::endl;
 
     // Passing the planned whole-body state for the publishing
     planned_wt_->resize(1);
     planned_wt_->at(0) = planned_ws_;
+
 }
 
 void CrawlPlanner::kill() {
@@ -455,19 +455,6 @@ bool  CrawlPlanner::update_base_position(double time){
     if (!stop_condition){
         //get feet reference to move base
         gl.bodySpliner->getBodyPoint(time, des_com_pos, gl.des_base_orient);
-        //TODO remove
-        gl.bodySpliner->getFeetPoint((double) planning_rate_, time, gl.stance_legs, des_q_, feet_intermediate);
-        //computeIK from  feet reference
-        for (int i=0; i<dog::_LEGS_COUNT; i++){
-            if (gl.stance_legs[dog::LegID(i)]){
-                gl.footPosDes[dog::LegID(i)]  = feet_intermediate[dog::LegID(i)].x;
-                gl.footVelDes[dog::LegID(i)]  = feet_intermediate[dog::LegID(i)].xd;
-            }
-        }
-        //
-
-        //in alternatuive
-        //gl.bodySpliner->updateFeetPoint(des_com_pos.xd,gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
         return false; //base is moving
     } else {
         baseTimer.resetTimer(); //reset timer for next state
@@ -557,6 +544,39 @@ void CrawlPlanner::start_crawl(void)
         bs->setOrientation_W(actual_ws_->getBaseOrientation());
         gl.footPosDes = sample_footPosDes = gl.footPos;
     }
+}
+
+
+void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet_jacs,
+                                     std::shared_ptr<iit::dog::ForwardKinematics>& fwd_kin,
+                                     std::shared_ptr<iit::dog::ShinJacobians>& shin_jacs,
+                                     std::shared_ptr<InertiaPropertiesBase> &inertia_props,
+                                     std::shared_ptr<HomogeneousTransformsBase> &hom_transforms,
+                                     std::shared_ptr<JSIMBase> &jsim,
+                                     std::shared_ptr<InverseDynamicsBase> &inv_dyn,
+                                     std::shared_ptr<KinDynParams> &params,
+                                     std::shared_ptr<LimitsBase> & limits,
+                                     std::shared_ptr<FeetContactForces> & feet_forces)
+ {
+    PlannerBase::setRobotModels(feet_jacs,
+                               fwd_kin,
+                               shin_jacs,
+                               inertia_props,
+                               hom_transforms,
+                               jsim,
+                               inv_dyn, params,
+                               limits,
+                               feet_forces);
+
+    // setting the God Object
+    gl.feet_jacobians_ = feet_jacs;
+    gl.fwd_kin_ = fwd_kin;
+    gl.linksInertia = inertia_props;
+    gl.homogeneousTransforms = hom_transforms;
+    gl.jsim = jsim;
+    gl.invDynEngine = inv_dyn;
+    gl.default_pg = params;
+    gl.limits = limits;
 }
 
 
