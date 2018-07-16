@@ -209,9 +209,28 @@ void CrawlPlanner::run(double time,
     myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
     myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
 
+    for (int i=0; i<number_of_steps; i++)
+    {
 
+        display_->drawSphere(Vector3d(footHolds[LF].x(i),footHolds[LF].y(i),0.0),
+                             0.05,
+                             dwl::Color(dwl::ColorType::Green, 1.),
+                             "world");
 
+        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[LF].y(i),0.0),
+                                     0.05,
+                                     dwl::Color(dwl::ColorType::Green, 1.),
+                                     "world");
+        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[LH].y(i),0.0),
+                             0.05,
+                             dwl::Color(dwl::ColorType::Red, 1.),
+                             "world");
+        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[RH].y(i),0.0),
+                             0.05,
+                             dwl::Color(dwl::ColorType::Red, 1.),
+                             "world");
 
+    }
     ///////////////////////////
 
     //map com motion into feet motion

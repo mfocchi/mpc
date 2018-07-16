@@ -23,6 +23,7 @@
 #include <dls_planner/PlannerBase.h>
 #include <pluginlib/class_list_macros.h>
 
+#include <iit/locomotionutils/TrunkController.h>
 
 //crawl
 #include <terrain_estimator/CTerrainEstimator.h>
