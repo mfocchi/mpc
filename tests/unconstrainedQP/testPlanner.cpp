@@ -25,7 +25,7 @@ double weight_R = 1e-06;
 double weight_Q = 1;
 
 VectorXd  jerk;
-Vector3d  initial_state = Vector3d(0.1,-0.1,0.0);
+Vector3d  initial_state = Vector3d(0.2,-0.1,0.0);
 VectorXd zmp_x, zmp_y, com_x, com_y;
 
 //get user input

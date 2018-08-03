@@ -42,18 +42,23 @@ install(TARGETS ${PROJECT_NAME}
 install(DIRECTORY include/${PROJECT_NAME}/
         DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
 
-add_executable(testPlanner tests/testPlanner.cpp src/MPCPlanner.cpp)
+add_executable(testPlanner tests/unconstrainedQP/testPlanner.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlanner   ${catkin_LIBRARIES})
-set_target_properties(testPlanner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set_target_properties(testPlanner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/unconstrainedQP")
 
-add_executable(testPlannerXY tests/testPlannerXY.cpp src/MPCPlanner.cpp)
+add_executable(testPlannerXY tests/unconstrainedQP_XY/testPlannerXY.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXY   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/unconstrainedQP_XY")
 
-add_executable(testPlannerXYconstraint tests/testPlannerXYconstraint.cpp src/MPCPlanner.cpp)
-target_link_libraries(testPlannerXYconstraint   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXYconstraint PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+add_executable(testPlannerXYconstraintDecoupled tests/constrainedQP_decoupled/testPlannerXYconstraintDecoupled.cpp src/MPCPlanner.cpp)
+target_link_libraries(testPlannerXYconstraintDecoupled   ${catkin_LIBRARIES})
+set_target_properties(testPlannerXYconstraintDecoupled PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/constrainedQP_decoupled")
 
-add_executable(testPlannerXYconstraintMPC tests/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
+add_executable(testPlannerXYconstraintCoupled tests/constrainedQP_coupled/testPlannerXYconstraintCoupled.cpp src/MPCPlanner.cpp)
+target_link_libraries(testPlannerXYconstraintCoupled   ${catkin_LIBRARIES})
+set_target_properties(testPlannerXYconstraintCoupled PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/constrainedQP_coupled")
+
+
+add_executable(testPlannerXYconstraintMPC tests/replanning/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXYconstraintMPC   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXYconstraintMPC PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set_target_properties(testPlannerXYconstraintMPC PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/replanning")
