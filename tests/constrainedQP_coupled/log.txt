@@ -1,0 +1,2 @@
+
+run with optimize velocity on 0.15 -0.1 plot  constrainViolationCoupled.pdf and trackingVelocity.pdf

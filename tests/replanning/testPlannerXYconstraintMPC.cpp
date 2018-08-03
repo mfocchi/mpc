@@ -43,8 +43,6 @@ int main()
     MatrixXd A; VectorXd b;
 
     FootScheduler replanning_schedule; replanning_schedule.setSequence(LF, RH,RF,LH);
-
-    int replanningFlag = true;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
     double disturbance = 0.0;
@@ -62,12 +60,10 @@ int main()
     //newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
     //newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
     //newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
-    newline::getInt("replanning? [0/1]:", replanningFlag, replanningFlag);
     newline::getInt("optimize velocity? [0/1]:", optimizeVelocityFlag, optimizeVelocityFlag);
     newline::getDouble("disturbance:", disturbance, disturbance);
     newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
     newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
-
     newline::getInt("experiment_duration :", experiment_duration, experiment_duration);
     newline::getInt("use com step correction? [0/1]:", useComStepCorrection, useComStepCorrection);
 
@@ -93,14 +89,12 @@ int main()
     initial_feet_y[LH] = initial_state_y(0) + 1.0;
     initial_feet_y[RH] = initial_state_y(0) -1.0;
 
-
-
     //matlab file plotTrajXYconstraintCoupledMPCreplanning
     Vector3d  actual_state_x,actual_state_x1,actual_state_y;
 
     int replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
     prt(replanningWindow)
-            int sample, sampleW = 0, replanningStage = 0;
+    int sample, sampleW = 0, replanningStage = 0;
     VectorXd jerk_disturbance; jerk_disturbance.resize(experiment_duration); jerk_disturbance.setZero();
 
     //init the state
@@ -108,7 +102,7 @@ int main()
     actual_state_y = initial_state_y;
     //apply disturbance
     jerk_disturbance.segment(4, experiment_duration-4 ).setConstant(disturbance);
-    myPlanner.saveTraj("./replan/jerk_disturbance",  jerk_disturbance,  false);
+    myPlanner.saveTraj("./replan_data/jerk_disturbance",  jerk_disturbance,  false);
 
     //loop
     for (int sample = 0; sample<experiment_duration;sample++) //replanning iterations
@@ -120,7 +114,7 @@ int main()
             std::cout<<"----------------------------------------------------------------------"<<std::endl;
             prt(replanningStage)
 
-                    if (sample>0)//when sample =0 the first time just use the initial value
+            if (sample>0)//when sample =0 the first time just use the initial value
             {
                 for (int leg = 0; leg<4;leg++)
                 {
@@ -141,7 +135,7 @@ int main()
 
             //find the swing leg in sampleW and update the schedule to that and do the step
             prt(initial_feet_x)
-                    myPlanner.printSwing(replanning_schedule.getCurrentSwing());
+            myPlanner.printSwing(replanning_schedule.getCurrentSwing());
             //recompute the new steps from the actual step
             if (useComStepCorrection)
             {
@@ -174,30 +168,30 @@ int main()
             myPlanner.computeCOMtrajectory( actual_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
             myPlanner.computeCOMtrajectory( actual_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
 
-            myPlanner.saveTraj("./replan/com_x"+to_string(replanningStage), com_x,false);
-            myPlanner.saveTraj("./replan/com_y"+to_string(replanningStage), com_y,false);
-            myPlanner.saveTraj("./replan/com_xd"+to_string(replanningStage), com_xd,false);
-            myPlanner.saveTraj("./replan/com_yd"+to_string(replanningStage), com_yd,false);
-            myPlanner.saveTraj("./replan/zmp_x"+to_string(replanningStage), zmp_x,false);
-            myPlanner.saveTraj("./replan/zmp_y"+to_string(replanningStage), zmp_y,false);
+            myPlanner.saveTraj("./replan_data/com_x"+to_string(replanningStage), com_x,false);
+            myPlanner.saveTraj("./replan_data/com_y"+to_string(replanningStage), com_y,false);
+            myPlanner.saveTraj("./replan_data/com_xd"+to_string(replanningStage), com_xd,false);
+            myPlanner.saveTraj("./replan_data/com_yd"+to_string(replanningStage), com_yd,false);
+            myPlanner.saveTraj("./replan_data/zmp_x"+to_string(replanningStage), zmp_x,false);
+            myPlanner.saveTraj("./replan_data/zmp_y"+to_string(replanningStage), zmp_y,false);
 
-            myPlanner.saveTraj("./replan/footHoldsLF"+to_string(replanningStage),  footHolds[LF].x, footHolds[LF].y,false);
-            myPlanner.saveTraj("./replan/footHoldsRF"+to_string(replanningStage),  footHolds[RF].x, footHolds[RF].y,false);
-            myPlanner.saveTraj("./replan/footHoldsLH"+to_string(replanningStage),  footHolds[LH].x, footHolds[LH].y,false);
-            myPlanner.saveTraj("./replan/footHoldsRH"+to_string(replanningStage),  footHolds[RH].x, footHolds[RH].y,false);
+            myPlanner.saveTraj("./replan_data/footHoldsLF"+to_string(replanningStage),  footHolds[LF].x, footHolds[LF].y,false);
+            myPlanner.saveTraj("./replan_data/footHoldsRF"+to_string(replanningStage),  footHolds[RF].x, footHolds[RF].y,false);
+            myPlanner.saveTraj("./replan_data/footHoldsLH"+to_string(replanningStage),  footHolds[LH].x, footHolds[LH].y,false);
+            myPlanner.saveTraj("./replan_data/footHoldsRH"+to_string(replanningStage),  footHolds[RH].x, footHolds[RH].y,false);
 
-            myPlanner.saveTraj("./replan/footPosLF"+to_string(replanningStage),  feetStates[LF].x, feetStates[LF].y,false);
-            myPlanner.saveTraj("./replan/footPosRF"+to_string(replanningStage),  feetStates[RF].x, feetStates[RF].y,false);
-            myPlanner.saveTraj("./replan/footPosLH"+to_string(replanningStage),  feetStates[LH].x, feetStates[LH].y,false);
-            myPlanner.saveTraj("./replan/footPosRH"+to_string(replanningStage),  feetStates[RH].x, feetStates[RH].y,false);
+            myPlanner.saveTraj("./replan_data/footPosLF"+to_string(replanningStage),  feetStates[LF].x, feetStates[LF].y,false);
+            myPlanner.saveTraj("./replan_data/footPosRF"+to_string(replanningStage),  feetStates[RF].x, feetStates[RF].y,false);
+            myPlanner.saveTraj("./replan_data/footPosLH"+to_string(replanningStage),  feetStates[LH].x, feetStates[LH].y,false);
+            myPlanner.saveTraj("./replan_data/footPosRH"+to_string(replanningStage),  feetStates[RH].x, feetStates[RH].y,false);
 
-            myPlanner.saveTraj("./replan/swingLF"+to_string(replanningStage),  feetStates[LF].swing,false);
-            myPlanner.saveTraj("./replan/swingRF"+to_string(replanningStage),  feetStates[RF].swing,false);
-            myPlanner.saveTraj("./replan/swingLH"+to_string(replanningStage),  feetStates[LH].swing,false);
-            myPlanner.saveTraj("./replan/swingRH"+to_string(replanningStage),  feetStates[RH].swing,false);
+            myPlanner.saveTraj("./replan_data/swingLF"+to_string(replanningStage),  feetStates[LF].swing,false);
+            myPlanner.saveTraj("./replan_data/swingRF"+to_string(replanningStage),  feetStates[RF].swing,false);
+            myPlanner.saveTraj("./replan_data/swingLH"+to_string(replanningStage),  feetStates[LH].swing,false);
+            myPlanner.saveTraj("./replan_data/swingRH"+to_string(replanningStage),  feetStates[RH].swing,false);
 
             std::ofstream file;
-            file.open("./replan/exp_data");
+            file.open("./replan_data/exp_data");
             file<<horizon_size <<" ";
             file<<number_of_steps <<" ";
             file<<experiment_duration <<std::endl;

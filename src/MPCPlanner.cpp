@@ -405,7 +405,7 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     }
 }
 
-//using polygon constraints
+//using polygon constraints without velocity optimization
 void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
                                           const Eigen::Vector3d & initial_state_x,
                                           const Eigen::Vector3d & initial_state_y,
@@ -471,6 +471,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 
 }
 
+//using polygon constraints with velocity optimization
 void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
                                           const Eigen::Vector3d & initial_state_x,
                                           const Eigen::Vector3d & initial_state_y,
@@ -509,7 +510,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 
 
     //add the velocity term (set a constraint only on the last value of velocity
-    int window = horizon_size_;//horizon_size_ //is the window where you enforce the velocity is good to set the whole horizon
+    int window = horizon_size_;//horizon_size_ //is the window where you enforce the velocity is good to set the whole horizon otherwise you have discontinuities
     buildMatrix(Cv,Xvx,Xvu);
     MatrixXd weightQv, Gv;
     weightQv.resize(horizon_size_,horizon_size_);
@@ -519,7 +520,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
         weightQv.setIdentity();
         weightQv  *= weight_Q*horizon_size_/window;//scale the importance with window size to make trhe costs comparable
     } else{
-        prt("usig impotance weighting")
+        prt("usig importance weighting")
         //importance weight, make gaussian wise most important the weights at the end of the replanning window
         weightQv = makeGaussian(horizon_size_, replanningWindow, replanningWindow).asDiagonal();
         weightQv  *= weight_Q*horizon_size_; //to use the same weights cause the gaussian  integral is 1 and not horizon_size (e.g. as it would be as we have all ones)

@@ -4,16 +4,16 @@ clc
 format short g
 format_input = '%f  %f ';
 format_input2 = '%f  %f %f';
-[horizon_size, number_of_steps, experiment_duration] = textread('./replan/exp_data', format_input2);
+[horizon_size, number_of_steps, experiment_duration] = textread('./replan_data/exp_data', format_input2);
 replanning_window = horizon_size/number_of_steps;
 replanning_stages = experiment_duration/replanning_window;
 simfig = figure;
 colors= dec2bin(0:1:2^3-1)-'0';
 
+addpath('../') %for plot polygon
+
 dist_sample = 1;
 for plan=1:replanning_stages
-
-
     disp(plan)
     loadTraj
         

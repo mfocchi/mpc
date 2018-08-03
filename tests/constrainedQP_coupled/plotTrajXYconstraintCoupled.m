@@ -21,6 +21,8 @@ swing=[];
 [time,zmp_y] =  textread('zmp_y.txt', format_input);
 [time,com_x] =  textread('com_x.txt', format_input);
 [time,com_y] =  textread('com_y.txt', format_input);
+[time,com_xd] =  textread('com_xd.txt', format_input);
+[time,com_yd] =  textread('com_yd.txt', format_input);
 [time,jerk_x] =  textread('jerk_x.txt', format_input);
 [time,jerk_y] =  textread('jerk_y.txt', format_input);
 
@@ -70,9 +72,22 @@ legend('LF','RF','LH','RH')
 subplot(3,1,3)
 plot(time, viol,'bo-');grid on
 
+close all
+ 
 f = figure(2)
-plot(time, viol,'bo-');grid on
+plot(time, viol,'b');grid on
+set(f, 'Paperunits' , 'centimeters', 'PaperSize', [15 12], 'PaperPosition', [0 0 15  12]);
 print(f, '-dpdf','../docs/constrainViolationCoupled.pdf')
+close(f)
+
+f = figure(3)
+plot(time, com_xd, 'b');grid on;hold on 
+plot(time, com_yd, 'r');grid on
+legend({'x','y'},'interpreter','latex','orientation','vertical','location' ,'southeast','FontSize',20)
+ylabel('$\dot{X}$  [$m/s$]','interpreter','latex','FontSize',20)
+xlabel('Time  [$s$]','interpreter','latex','FontSize',20)
+set(f, 'Paperunits' , 'centimeters', 'PaperSize', [15 12], 'PaperPosition', [0 0 15  12]);
+print(f, '-dpdf','../docs/trackingVelocity.pdf')
 close(f)
 
 % %%simple test on 1 var
@@ -82,7 +97,8 @@ close(f)
 % plot(time  , com_y,'-k' )
 % linkaxes([h1 h2],'x')
 
-
+%%
+close all
 
 %%REPLAY TRAJECTORY
 VIDEO = false
