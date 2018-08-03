@@ -5,6 +5,8 @@
  *      Author: mfocchi
  */
 #include <crawl_planner/MPCPlanner.h>
+#include <crawl_planner/FootScheduler.h>
+
 
 using namespace std;
 using namespace Eigen;
@@ -221,7 +223,7 @@ void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_st
 
 }
 
-
+//this enables to set only BOX constraints, no zmp reference so you need to set only R
 void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
 {
     this->height_ = actual_height;
@@ -239,8 +241,8 @@ void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & 
     buildMatrix(Cz,Zx,Zu);
 
 
-    //Finds x that minimizes xddd^T * Q * xddd
-    GQ.setIdentity(); GQ*=weight_Q;
+    //Finds x that minimizes xddd^T * R * xddd only the jerk is optimized
+    GQ.setIdentity(); GQ*=weight_R;
     g0.setZero();
 
 
@@ -292,13 +294,55 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     Eigen::MatrixXd GQ, CI, CE; //A is used for computing wrencherror
     Eigen::VectorXd g0, ce0, ci0, solution;
     //build matrix
-    //we have both jerk and slack vars as
-    GQ.resize(2*horizon_size_,2*horizon_size_);
-    g0.resize(2*horizon_size_,1);g0.setZero();
-    CI.resize(3*horizon_size_,2*horizon_size_); CI.setZero();//max /min for all horizon
-    ci0.resize(3*horizon_size_);
+
+    //1 -old using 1 slack for both  max min constraints - gives a tradeoff
+//    //we have both jerk (N) and slack vars (N)
+//    GQ.resize(2*horizon_size_,2*horizon_size_);
+//    g0.resize(2*horizon_size_,1);g0.setZero();
+//    CI.resize(3*horizon_size_,2*horizon_size_); CI.setZero();//max /min for all horizon
+//    ci0.resize(3*horizon_size_);
+//    jerk_vector.resize(horizon_size_);
+//    solution.resize(2*horizon_size_); //jerk in \R^N w in R^{N}
+//    //update with height
+//    Cz << 1 , 0  , -height_/gravity_;
+//    buildMatrix(Cz,Zx,Zu);
+
+//    //GQ shoud be positive definite
+//    GQ.setIdentity();
+//    GQ.block(0,0, horizon_size_,horizon_size_)*=weight_R; //jerk part
+//    GQ.block(horizon_size_,horizon_size_, horizon_size_,horizon_size_)*=weight_Q; //slack part
+
+//    //the lienar part comes from slacks   ones(1000)^T*Q*w
+//    g0.segment(horizon_size_,horizon_size_).setConstant(1000*weight_Q);
+//    //no equality constraints
+//    CE.resize(0,0);ce0.resize(0);
+
+//    //A*x+b + w >=0 / w<0 for robustness
+//    //inequality (2*N) min <zmp < max
+
+//    //first N min constraint -- zmp  >= min => zmp - min + w > 0  => Z_x x0 + Zu *xddd - min + w>0 =>   Zu *xddd + (Z_x*x0  - min) + w  >0
+//    // [Zu | Inxn] *[xddd/w]  + (Z_x*x0  - min) >0
+//    CI.block(0, 0, horizon_size_,horizon_size_) = Zu;
+//    CI.block(0, horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
+//    ci0.segment(0,horizon_size_) = Zx*initial_state - zmpLim.min;
+//    //N max constraint -- zmp  <= max => -zmp > -max => -zmp + max + w>0 => -Z_x x0 - Zu *xddd +max + w>0 => - Zu *xddd  + (max -Z_x x0)  +w >0
+//    //[-Zu | Inxn] *[xddd/w]   + (max -Z_x x0)    >0
+//    CI.block(horizon_size_, 0, horizon_size_,horizon_size_) = -Zu;
+//    CI.block(horizon_size_, horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
+//    ci0.segment(horizon_size_,horizon_size_) = zmpLim.max-Zx*initial_state;
+
+//    //inequality (1*N) w<=0 => -w>0
+//    CI.block(2*horizon_size_, horizon_size_, horizon_size_,horizon_size_)= -MatrixXd::Identity(horizon_size_,horizon_size_);
+//    ci0.segment(2*horizon_size_,horizon_size_).setZero();
+
+    //2- new using 1 slack for each constraints
+    //we have both jerk (N) and slack vars (2N)
+    GQ.resize(3*horizon_size_,3*horizon_size_);
+    g0.resize(3*horizon_size_,1);g0.setZero();
+    CI.resize(4*horizon_size_,3*horizon_size_); CI.setZero();//max /min for all horizon
+    ci0.resize(4*horizon_size_);
     jerk_vector.resize(horizon_size_);
-    solution.resize(2*horizon_size_);
+    solution.resize(3*horizon_size_); //jerk in \R^N w in R^{2N}
     //update with height
     Cz << 1 , 0  , -height_/gravity_;
     buildMatrix(Cz,Zx,Zu);
@@ -306,10 +350,10 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     //GQ shoud be positive definite
     GQ.setIdentity();
     GQ.block(0,0, horizon_size_,horizon_size_)*=weight_R; //jerk part
-    GQ.block(horizon_size_,horizon_size_, horizon_size_,horizon_size_)*=weight_Q; //slack part
+    GQ.block(horizon_size_,horizon_size_, 2*horizon_size_,2*horizon_size_)*=weight_Q; //slack part
 
     //the lienar part comes from slacks   ones(1000)^T*Q*w
-    g0.segment(horizon_size_,horizon_size_).setConstant(1000*weight_Q);
+    g0.segment(horizon_size_,2*horizon_size_).setConstant(1000*weight_Q);
     //no equality constraints
     CE.resize(0,0);ce0.resize(0);
 
@@ -324,13 +368,12 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     //N max constraint -- zmp  <= max => -zmp > -max => -zmp + max + w>0 => -Z_x x0 - Zu *xddd +max + w>0 => - Zu *xddd  + (max -Z_x x0)  +w >0
     //[-Zu | Inxn] *[xddd/w]   + (max -Z_x x0)    >0
     CI.block(horizon_size_, 0, horizon_size_,horizon_size_) = -Zu;
-    CI.block(horizon_size_, horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
+    CI.block(horizon_size_, 2*horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
     ci0.segment(horizon_size_,horizon_size_) = zmpLim.max-Zx*initial_state;
 
     //inequality (1*N) w<=0 => -w>0
-    CI.block(2*horizon_size_, horizon_size_, horizon_size_,horizon_size_)= -MatrixXd::Identity(horizon_size_,horizon_size_);
-    ci0.segment(2*horizon_size_,horizon_size_).setZero();
-
+    CI.block(2*horizon_size_, horizon_size_, 2*horizon_size_,2*horizon_size_)= -MatrixXd::Identity(2*horizon_size_,2*horizon_size_);
+    ci0.segment(2*horizon_size_,2*horizon_size_).setZero();
 
 //
 //    prt(GQ)
@@ -362,6 +405,7 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     }
 }
 
+//using polygon constraints
 void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
                                           const Eigen::Vector3d & initial_state_x,
                                           const Eigen::Vector3d & initial_state_y,
@@ -395,12 +439,12 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
     CE.resize(0,0);ce0.resize(0);
 
     //inequalities
-    //Zuc is block diagonal
+    //Zuc is block diagonal 2Nx2N
     Zuc.resize(2*horizon_size_,2*horizon_size_); Zuc.setZero();
     Zuc.block(0,0,horizon_size_,horizon_size_) = Zu;
     Zuc.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Zu;
 
-//    //Zxc, Zyc are columns
+//    //Zxc, Zyc are column matrix
     Zxc.resize(2*horizon_size_,3);Zxc.setZero();
     Zxc.block(0,0,horizon_size_,3) = Zx;
     Zyc.resize(2*horizon_size_,3);Zyc.setZero();
@@ -722,4 +766,165 @@ VectorXd MPCPlanner::makeGaussian(const int length, const int mean, const int st
 
     weight = arg.array().exp() / (std::sqrt(2*M_PI) * stddev);
     return weight;
+}
+void MPCPlanner::computeSteps(const LegDataMap<double> & initial_feet_x,
+                  const LegDataMap<double> & initial_feet_y,
+                  double distance,
+                  const int number_of_steps,
+                  const int horizon_size,
+                  LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner)
+{
+    computeSteps(Vector2d(distance/number_of_steps, 0.0), initial_feet_x, initial_feet_y,
+            distance,  number_of_steps, horizon_size,
+            feetStates,  footHolds,
+            A,  b,  myPlanner, iit::dog::LF);
+
+}
+
+
+void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<double> & initial_feet_x,
+                  const LegDataMap<double> & initial_feet_y,
+                  double distance,
+                  const int number_of_steps,
+                  const int horizon_size,
+                  LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
+                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, dog::LegID swing_leg_index, Vector2d  initialCoM)
+{
+
+    FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
+    schedule.setCurrentSwing(swing_leg_index);
+    int start_phase_index,  phase_duration, number_of_constraints;
+    double distance_per_step = distance/number_of_steps;
+    int step_knots = floor(horizon_size/number_of_steps);
+    LegDataMap<double> feetValuesX, feetValuesY;
+
+    feetValuesX = initial_feet_x;
+    feetValuesY = initial_feet_y;
+
+    //init stuff
+    number_of_constraints = 0;
+    start_phase_index = 0;
+    phase_duration = step_knots/2; //10 samples both swing and phase
+    A.resize((4+4)*phase_duration*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
+    b.resize((4+4)*phase_duration*number_of_steps);
+    A.setZero();
+    b.setZero();
+
+
+    for (int leg=0;leg<4;leg++){
+        feetStates[leg].resize(horizon_size);
+        //set always stances
+        feetStates[leg].swing.setConstant(horizon_size,false);
+        footHolds[leg].resize(2*number_of_steps);
+
+    }
+    prt(initialCoM(rbd::Y))
+
+    LegDataMap<bool> comCorrectionFlag = false;
+    LegDataMap<double> comCorrectionValue = 0.0;
+    if (!initialCoM.isZero(0))
+    {
+        comCorrectionFlag = true;
+        comCorrectionValue[LF] = initialCoM(rbd::Y) +1.0 - feetValuesY[LF];
+        comCorrectionValue[RF] = initialCoM(rbd::Y) -1.0 - feetValuesY[RF];
+        comCorrectionValue[LH] = initialCoM(rbd::Y) +1.0 - feetValuesY[LH];
+        comCorrectionValue[RH] = initialCoM(rbd::Y) -1.0 - feetValuesY[RH];
+
+        prt(feetValuesY)
+    }
+
+    //prt(phase_duration)
+    for (int i=0; i<number_of_steps;i++)
+    {
+        //4 stance///////////////////////////
+        feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
+        feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
+        feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
+        feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
+        feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
+        feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
+        feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
+        feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
+        //save footholds
+        footHolds[LF].x(2*i) = feetValuesX[LF]; footHolds[LF].y(2*i) = feetValuesY[LF];
+        footHolds[RF].x(2*i) = feetValuesX[RF]; footHolds[RF].y(2*i) = feetValuesY[RF];
+        footHolds[LH].x(2*i) = feetValuesX[LH]; footHolds[LH].y(2*i) = feetValuesY[LH];
+        footHolds[RH].x(2*i) = feetValuesX[RH]; footHolds[RH].y(2*i) = feetValuesY[RH];
+        //build inequalities with the set of stance feet and positions
+        myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration, horizon_size, A,  b,  number_of_constraints );
+        start_phase_index += phase_duration;
+
+        //3 stance/////////////////////////////////////
+        //step
+        if (comCorrectionFlag[schedule.getCurrentSwing()])
+        {
+
+            //std::cout<< "correxcting com: " <<comCorrectionValue[schedule.getCurrentSwing()]<<std::endl;
+            feetValuesY[schedule.getCurrentSwing()]+= comCorrectionValue[schedule.getCurrentSwing()];
+            comCorrectionFlag[schedule.getCurrentSwing()] = false;
+        }
+        //default stepping
+        feetValuesX[schedule.getCurrentSwing()]+=  userSpeed(0); //old         feetValuesX[schedule.getCurrentSwing()]+= distance_per_step
+        feetValuesY[schedule.getCurrentSwing()]+=  userSpeed(1); //old 0.1
+
+
+        //set swing for that leg
+        feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
+        feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
+        feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
+        feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
+        feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
+        feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
+        feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
+        feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
+        feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
+        //save footholds
+        footHolds[LF].x(2*i + 1) = feetValuesX[LF]; footHolds[LF].y(2*i +1) = feetValuesY[LF];
+        footHolds[RF].x(2*i + 1) = feetValuesX[RF]; footHolds[RF].y(2*i +1) = feetValuesY[RF];
+        footHolds[LH].x(2*i + 1) = feetValuesX[LH]; footHolds[LH].y(2*i +1) = feetValuesY[LH];
+        footHolds[RH].x(2*i + 1) = feetValuesX[RH]; footHolds[RH].y(2*i +1) = feetValuesY[RH];
+    //    //build inequalities with the set of stance feet and positions
+        myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration,horizon_size, A,  b,  number_of_constraints );
+        start_phase_index += phase_duration;
+        schedule.next(); //update the step in the schedule
+    }
+    //compute missing knots last phase is double stance
+    int missing_knots = horizon_size - start_phase_index;
+    //end with 4 stance
+    feetStates[LF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LF]);
+    feetStates[RF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RF]);
+    feetStates[LH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LH]);
+    feetStates[RH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RH]);
+    feetStates[LF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LF]);
+    feetStates[RF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RF]);
+    feetStates[LH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LH]);
+    feetStates[RH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RH]);
+
+    myPlanner.buildPolygonMatrix(feetStates, start_phase_index,missing_knots,horizon_size, A,  b,  number_of_constraints);
+    //cause you have 3 stances
+    A.conservativeResize(number_of_constraints,horizon_size*2);
+    b.conservativeResize(number_of_constraints);
+    //prt(missing_knots)
+}
+
+void MPCPlanner::printSwing(LegID swing)
+{
+   switch(swing)
+   {
+    case LF:
+        std::cout<<"swing LF:"<<std::endl;
+        break;
+    case RF:
+        std::cout<<"swing RF:"<<std::endl;
+        break;
+    case LH:
+        std::cout<<"swing LH:"<<std::endl;
+        break;
+    case RH:
+        std::cout<<"swing RH:"<<std::endl;
+        break;
+    default:
+        break;
+   }
 }

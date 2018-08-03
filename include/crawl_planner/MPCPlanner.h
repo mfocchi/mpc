@@ -90,6 +90,25 @@ class MPCPlanner
         void setHorizonSize(int horizon);
         Eigen::VectorXd makeGaussian(const int length, const int mean, const int stddev);
         Eigen::VectorXd  getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates);
+
+        void computeSteps(const iit::dog::LegDataMap<double> & initial_feet_x,
+                          const iit::dog::LegDataMap<double> & initial_feet_y,
+                          const double distance, const int number_of_steps, const int horizon_size,
+                          iit::dog::LegDataMap<MPCPlanner::footState> & feetStates,
+                          iit::dog::LegDataMap<MPCPlanner::footState> & footHolds,
+                          Eigen::MatrixXd & A,  Eigen::VectorXd & b, MPCPlanner & myPlanner);
+
+
+        void computeSteps(const Eigen::Vector2d & userSpeed,
+                          const iit::dog::LegDataMap<double> & initial_feet_x,
+                          const iit::dog::LegDataMap<double> & initial_feet_y,
+                          const double distance, const int number_of_steps, const int horizon_size,
+                          iit::dog::LegDataMap<MPCPlanner::footState> & feetStates,
+                          iit::dog::LegDataMap<MPCPlanner::footState> & footHolds,
+                          Eigen::MatrixXd & A,  Eigen::VectorXd & b, MPCPlanner & myPlanner,
+                          iit::dog::LegID swing_leg_index,  Eigen::Vector2d initialCoM = Eigen::Vector2d::Zero());
+        void printSwing(iit::dog::LegID swing);
+
     private:
 
 
