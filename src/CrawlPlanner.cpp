@@ -30,6 +30,10 @@ bool CrawlPlanner::init()
                        "crawl on with virtual model on",
                        &CrawlPlanner::start_crawl, this);
 
+    addConsoleFunction("rep",
+                       "start_replanning_crawl",
+                       &CrawlPlanner::start_replanning_crawl, this);
+
     addConsoleFunction("debug",
                        "debug",
                        &CrawlPlanner::debug, this);
@@ -48,61 +52,6 @@ bool CrawlPlanner::init()
     return true;
 }
 
-void CrawlPlanner::debug()
-{
-    initial_feet_x[LF] = gl.footPosDes[LF](rbd::X);
-    initial_feet_x[RF] = gl.footPosDes[RF](rbd::X);
-    initial_feet_x[LH] = gl.footPosDes[LH](rbd::X);
-    initial_feet_x[RH] = gl.footPosDes[RH](rbd::X);
-    //init y all the same
-    initial_feet_y[LF] = gl.footPosDes[LF](rbd::Y);
-    initial_feet_y[RF] = gl.footPosDes[RF](rbd::Y);
-    initial_feet_y[LH] = gl.footPosDes[LH](rbd::Y);
-    initial_feet_y[RH] = gl.footPosDes[RH](rbd::Y);
-
-    initial_state_x(0) = gl.actual_CoM.x(rbd::X);
-    initial_state_x(1) = gl.actual_CoM.xd(rbd::X);
-    initial_state_x(2) = 0.0;
-
-    initial_state_y(0) = gl.actual_CoM.x(rbd::Y);
-    initial_state_y(1) = gl.actual_CoM.xd(rbd::Y);
-    initial_state_y(2) = 0.0;
-
-
-    Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
-    //single plan
-    myPlanner->computeSteps(userSpeed,
-                            initial_feet_x,
-                            initial_feet_y,
-                            distance,
-                            number_of_steps,
-                            horizon_size,
-                            feetStates, footHolds,
-                            A, b, *myPlanner,
-                            mySchedule->getCurrentSwing());
-                            //,Vector2d(gl.actual_CoM.x(rbd::X), gl.actual_CoM.x(rbd::Y)));
-
-    for (int i=0; i<footHolds[LF].x.size(); i++)
-    {
-        if ((i % 2) == 0)
-               prt(footHolds[LF].x[i])
-    }
-    for (int i=0; i<footHolds[LF].x.size(); i++)
-    {
-         if ((i % 2) == 0)
-            prt(footHolds[LF].y[i])
-    }
-
-    //plotSteps()
-
-    myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,
-                                        initial_state_x, initial_state_y,
-                                        A,b,jerk_x,jerk_y);
-    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, des_com_x);
-    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, des_com_y);
-
-
-}
 
 void CrawlPlanner::starting(double time) {
     std::cout << "Starting CrawlPlanner controller at " << time << " sec.";
@@ -185,21 +134,47 @@ void CrawlPlanner::starting(double time) {
     std::cout<<"horizon_duration is :"<<horizon_duration<< std::endl;
     std::cout<<"time_resolution is :"<<time_resolution<< std::endl;
     std::cout<<"horizon size is :"<<horizon_size<< std::endl;
-
-
     std::cout<<"number of steps is :"<<number_of_steps<< std::endl;
-
     std::cout<<"userspeed is X:"<<linearSpeedX <<"  Y: "<<linearSpeedY << std::endl;
+    replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
+    std::cout<<"replanningWindow is :"<<replanningWindow<< std::endl;
+
     des_com_x.resize(horizon_size);
     des_com_y.resize(horizon_size);
 
-    initial_state_x(0) = gl.actual_CoM.x(rbd::X);
-    initial_state_x(1) = gl.actual_CoM.xd(rbd::X);
-    initial_state_x(2) = 0.0;
+    des_com_xd.resize(horizon_size);
+    des_com_yd.resize(horizon_size);
 
-    initial_state_y(0) = gl.actual_CoM.x(rbd::Y);
-    initial_state_y(1) = gl.actual_CoM.xd(rbd::Y);
-    initial_state_y(2) = 0.0;
+    zmp_x.resize(horizon_size);
+    zmp_y.resize(horizon_size);
+
+    //set initial state for com and feet
+    actual_state_x(0) = gl.actual_CoM.x(rbd::X);
+    actual_state_x(1) = gl.actual_CoM.xd(rbd::X);
+    actual_state_x(2) = 0.0;
+
+    actual_state_y(0) = gl.actual_CoM.x(rbd::Y);
+    actual_state_y(1) = gl.actual_CoM.xd(rbd::Y);
+    actual_state_y(2) = 0.0;
+
+    //this should be in the WF
+    initial_feet_x[LF] = (gl.actual_base.x + gl.Rt*gl.footPosDes[LF])(rbd::X);
+    initial_feet_x[RF] = (gl.actual_base.x + gl.Rt*gl.footPosDes[RF])(rbd::X);
+    initial_feet_x[LH] = (gl.actual_base.x + gl.Rt*gl.footPosDes[LH])(rbd::X);
+    initial_feet_x[RH] = (gl.actual_base.x + gl.Rt*gl.footPosDes[RH])(rbd::X);
+    //init y all the same
+    initial_feet_y[LF] = (gl.actual_base.x + gl.Rt*gl.footPosDes[LF])(rbd::Y);
+    initial_feet_y[RF] = (gl.actual_base.x + gl.Rt*gl.footPosDes[RF])(rbd::Y);
+    initial_feet_y[LH] = (gl.actual_base.x + gl.Rt*gl.footPosDes[LH])(rbd::Y);
+    initial_feet_y[RH] = (gl.actual_base.x + gl.Rt*gl.footPosDes[RH])(rbd::Y);
+
+    for (int leg=0;leg<4;leg++){
+        feetStates[leg].resize(horizon_size);
+        //set always stances
+        feetStates[leg].swing.setConstant(horizon_size,false);
+        footHolds[leg].resize(2*number_of_steps);
+
+    }
 
     printf("Crawl planner: finished starting\n");
 }
@@ -253,61 +228,163 @@ void CrawlPlanner::run(double time,
     //fills in the base and joints variables
     //crawlStateMachine(time);
 
-
-    //////////////////////////
-
-
-
-//    viol = myPlanner->getConstraintViolation(feetStates);
-//    prt(jerk_x.transpose())
-//    prt(jerk_y.transpose())
-//    myPlanner->computeZMPtrajectory( initial_state_x, jerk_x, zmp_x);
-//    myPlanner->computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);
-//    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_x);
-//    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_y);
-//    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
-//    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
-
-
-
-
-    for (int i=0; i<footHolds[LF].x.size(); i++)
+    /////////replanning
+    if (replanningFlag)
     {
-        double transparency = (footHolds[LF].x.size() - i)/footHolds[LF].x.size();
-        display_->drawSphere(Vector3d(footHolds[LF].x(i),footHolds[LF].y(i),0.0),
-                             0.05,
-                             dwl::Color(dwl::ColorType::Red, 0.1 + 0.9*transparency),
-                             "world");
-        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[RF].y(i),0.0),
+
+        Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
+
+        if ((sample % replanningWindow) == 0)
+        {
+
+            //do the replan
+            replanningStage++;
+            std::cout<<"----------------------------------------------------------------------"<<std::endl;
+            prt(replanningStage)
+
+
+            //set initial state for optimization to actual state (there might have been disturbances)
+            if (!firstTime)
+            {
+                //use the desired one (just for debug)
+                for (int leg = 0; leg<4;leg++)
+                {
+                    //update feet with the actual stance (in the wf)
+                    initial_feet_x[leg] = feetStates[leg].x(sampleW);
+                    initial_feet_y[leg] = feetStates[leg].y(sampleW);
+                }
+                actual_state_x = Vector3d ( des_com_pos.x(rbd::X),  des_com_pos.xd(rbd::X), 0.0);
+                actual_state_y = Vector3d ( des_com_pos.x(rbd::Y), des_com_pos.xd(rbd::Y), 0.0);
+
+                //use the actual state
+                //            actual_state_x = Vector3d ( gl.actual_CoM.x(rbd::X),  gl.actual_CoM.xd(rbd::X), 0.0);
+                //            actual_state_y = Vector3d ( gl.actual_CoM.x(rbd::Y),  gl.actual_CoM.xd(rbd::Y), 0.0);
+
+                mySchedule->next();
+            } else {
+                firstTime = false;
+                prt("first time dont update actual state and initial feet they arelady have been initialized")
+            }
+
+
+            //find the swing leg in sampleW and update the schedule to that and do the step
+            myPlanner->printSwing(mySchedule->getCurrentSwing());
+
+            //recompute the new steps from the actual step
+            myPlanner->computeSteps(userSpeed,
+                                    initial_feet_x,
+                                    initial_feet_y,
+                                    distance,
+                                    number_of_steps,
+                                    horizon_size,
+                                    feetStates, footHolds,
+                                    A, b, *myPlanner,
+                                    mySchedule->getCurrentSwing());
+
+            //replan from the actual state and the new steps overwriting the jerk
+            //        if (!optimizeVelocityFlag)
+            //            myPlanner->solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
+            //        else {
+            //            weight_R = 0.01; myPlanner.setWeights(weight_R, weight_Q);
+            //            myPlanner->solveQPConstraintCoupled(height,actual_state_x, actual_state_y , A,b, userSpeed, jerk_x,jerk_y, replanningWindow);
+            //        }
+            myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
+
+            //prt(initial_feet_y)
+            //save it
+            //for the log compute the whole traj
+            myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_x);
+            myPlanner->computeCOMtrajectory( actual_state_y, jerk_y, des_com_y);
+            myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_xd, MPCPlanner::VELOCITY);
+            myPlanner->computeCOMtrajectory( actual_state_y, jerk_y, des_com_yd, MPCPlanner::VELOCITY);
+            myPlanner->computeZMPtrajectory( actual_state_x, jerk_x, zmp_x);
+            myPlanner->computeZMPtrajectory( actual_state_y, jerk_y, zmp_y);
+
+            viol = myPlanner->getConstraintViolation(feetStates);
+            //reset the counter
+            sampleW = 0;
+
+        } else {
+            sampleW++;
+
+            des_com_pos.x(rbd::X) = des_com_x(sampleW);
+            des_com_pos.x(rbd::Y) = des_com_y(sampleW);
+            des_com_pos.xd(rbd::X) = des_com_xd(sampleW);
+            des_com_pos.xd(rbd::Y) = des_com_yd(sampleW);
+
+            //set des feet
+            for (int leg = LF ; leg <=RH; leg++)
+            {
+                if (!feetStates[leg].swing(sampleW))
+                {
+                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
+                } else {
+                    //work out the new swing foot
+                    gl.footPosDes[leg].segment(rbd::X, 2) = Vector2d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW)) - Vector2d(des_com_x(sampleW), des_com_y(sampleW)) + (gl.Rt*gl.offCoM).segment(rbd::X,2);
+                    gl.stance_legs[leg] = false;
+                }
+            }
+
+            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
+                                 0.1,
+                                 dwl::Color(dwl::ColorType::Green,1.),
+                                 "world");
+        }
+        sample++;
+        //////////////////////////
+
+
+        //plotting footsteps and com trajectory
+        for (int i=0; i<footHolds[LF].x.size(); i++)
+        {
+            double transparency = (footHolds[LF].x.size() - i)/footHolds[LF].x.size();
+            display_->drawSphere(Vector3d(footHolds[LF].x(i),footHolds[LF].y(i),0.0),
+                                 0.05,
+                                 dwl::Color(dwl::ColorType::Red, 0.1 + 0.9*transparency),
+                                 "world");
+            display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[RF].y(i),0.0),
+                                 0.05,
+                                 dwl::Color(dwl::ColorType::Blue, 0.1 + 0.9*transparency),
+                                 "world");
+            display_->drawSphere(Vector3d(footHolds[LH].x(i),footHolds[LH].y(i),0.0),
+                                 0.05,
+                                 dwl::Color(dwl::ColorType::Green, 0.1 + 0.9*transparency),
+                                 "world");
+            display_->drawSphere(Vector3d(footHolds[RH].x(i),footHolds[RH].y(i),0.0),
+                                 0.05,
+                                 dwl::Color(dwl::ColorType::Yellow, 0.1 + 0.9*transparency),
+                                 "world");
+        }
+        //plot com trajectory on ground plane
+        for (int i=0; i<des_com_x.size(); i++)
+        {
+            //decimate a bit to avoid overload
+            if ((i % 10) == 0)
+            {
+                display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
                                      0.05,
-                                     dwl::Color(dwl::ColorType::Blue, 0.1 + 0.9*transparency),
+                                     dwl::Color(dwl::ColorType::Black, 1.),
                                      "world");
-        display_->drawSphere(Vector3d(footHolds[LH].x(i),footHolds[LH].y(i),0.0),
-                             0.05,
-                             dwl::Color(dwl::ColorType::Green, 0.1 + 0.9*transparency),
-                             "world");
-        display_->drawSphere(Vector3d(footHolds[RH].x(i),footHolds[RH].y(i),0.0),
-                             0.05,
-                             dwl::Color(dwl::ColorType::Yellow, 0.1 + 0.9*transparency),
-                             "world");
-
+            }
+        }
+        //plot com / zmp trajectory on ground plane
+        for (int i=0; i<zmp_x.size(); i++)
+        {
+            //decimate a bit to avoid overload
+            if ((i % 10) == 0)
+            {
+                display_->drawSphere(Vector3d(zmp_x(i),zmp_y(i),0.0),
+                                     0.05,
+                                     dwl::Color(dwl::ColorType::Red,1.),
+                                     "world");
+            }
+        }
     }
 
-    //plot com trajectory on ground plane
-    for (int i=0; i<des_com_x.size(); i++)
-    {
-        double transparency = (des_com_x.size() - i)/des_com_x.size();
-        display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
-                             0.05,
-                             dwl::Color(dwl::ColorType::Black, 0.1 + 0.9*transparency),
-                             "world");
-    }
-
-
-    ///////////////////////////
 
     //map com motion into feet motion
     gl.bodySpliner->updateFeetPoint(des_com_pos.xd, gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
+
     //map feet motion into joint motion
     ik_->getJointState(gl.footPosDes,
                        gl.footVelDes,
@@ -376,6 +453,49 @@ void CrawlPlanner::run(double time,
     planned_wt_->at(0) = planned_ws_;
 
 }
+
+
+//void getNewPlan()
+
+
+
+
+void CrawlPlanner::debug()
+{
+
+    //1 shoot optimization
+    Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
+    //single plan
+    myPlanner->computeSteps(userSpeed,
+                            initial_feet_x,
+                            initial_feet_y,
+                            distance,
+                            number_of_steps,
+                            horizon_size,
+                            feetStates, footHolds,
+                            A, b, *myPlanner,
+                            mySchedule->getCurrentSwing());
+                            //,Vector2d(gl.actual_CoM.x(rbd::X), gl.actual_CoM.x(rbd::Y)));
+
+//    for (int i=0; i<footHolds[LF].x.size(); i++)
+//    {
+//        if ((i % 2) == 0)
+//               prt(footHolds[LF].x[i])
+//    }
+//    for (int i=0; i<footHolds[LF].x.size(); i++)
+//    {
+//         if ((i % 2) == 0)
+//            prt(footHolds[LF].y[i])
+//    }
+    myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,
+                                        actual_state_x, actual_state_y,
+                                        A,b,jerk_x,jerk_y);
+    myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_x);
+    myPlanner->computeCOMtrajectory( actual_state_y, jerk_y, des_com_y);
+
+
+}
+
 
 void CrawlPlanner::kill() {
     std::cout << "Killing CrawlPlanner planner" << std::endl;
@@ -678,6 +798,14 @@ void CrawlPlanner::start_crawl(void)
     }
 }
 
+void CrawlPlanner::start_replanning_crawl()
+{
+
+ sample = 0;
+ sampleW = 0;
+ firstTime = true;
+ replanningFlag = true;
+}
 
 void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet_jacs,
                                      std::shared_ptr<iit::dog::ForwardKinematics>& fwd_kin,

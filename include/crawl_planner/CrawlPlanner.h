@@ -104,6 +104,7 @@ protected:
     bool update_swing_position(dog::LegID swing_leg_index, double time);
     void update_phase_duration(double cycle_time);
     void start_crawl();
+    void start_replanning_crawl();
 
     void crawlStateMachine(double time);
 
@@ -132,7 +133,9 @@ protected:
     int horizon_size = 0.0;//10 default for tests
     int number_of_steps = 20;
     double distance = 3.0;
-    int experiment_duration = 60;
+    int replanningWindow = 0.0;
+    int sample = 0, sampleW = 0, replanningStage = 0;
+    bool firstTime = true;
 
     double lateral_bound = 0.2;
     double time_resolution = 0.1;
@@ -141,8 +144,9 @@ protected:
 
     Eigen::VectorXd  jerk_x, jerk_y;
     Eigen::VectorXd  des_com_x, des_com_y;
-    Eigen::Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
-    Eigen::Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
+    Eigen::VectorXd  des_com_xd, des_com_yd;
+    Eigen::Vector3d  actual_state_x = Vector3d(0.0, 0.0,0.0);
+    Eigen::Vector3d  actual_state_y = Vector3d(0.0,-0.0,0.0);
     Eigen::VectorXd zmp_x, zmp_y, com_x, com_y, viol, com_xd, com_yd;
     iit::dog::LegDataMap<MPCPlanner::footState> feetStates;
     iit::dog::LegDataMap<MPCPlanner::footState> footHolds;
