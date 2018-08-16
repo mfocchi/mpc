@@ -15,6 +15,11 @@ CrawlPlanner::CrawlPlanner() {
     stepHandler.reset(new StepHandler(gl));
     bodyTargetHandler.reset(new BodyTargetHandler);
     bs.reset(new BaseState());
+
+    legmap[iit::dog::LF] = "LF";
+    legmap[iit::dog::RF] = "RF";
+    legmap[iit::dog::LH] = "LH";
+    legmap[iit::dog::RH] = "RH";
 }
 
 CrawlPlanner::~CrawlPlanner()
@@ -56,6 +61,7 @@ bool CrawlPlanner::init()
 void CrawlPlanner::starting(double time) {
     std::cout << "Starting CrawlPlanner controller at " << time << " sec.";
     std::cout << std::endl;
+     taskServoTime = time;
 
     //crawl init
     printf("chimney plan starting\n");
@@ -117,6 +123,7 @@ void CrawlPlanner::starting(double time) {
     //reset desired linear position to actual readings
     gl.computeCoM(q_, qd_);
     des_com_pos.x = gl.actual_CoM.x;//com control
+    des_com_pos.xd.setZero();
     //reset desired orientation
     gl.des_base_orient.x(rbd::X) = gl.roll;
     gl.des_base_orient.x(rbd::Y) = gl.pitch;
@@ -126,6 +133,7 @@ void CrawlPlanner::starting(double time) {
     initial_height = gl.actual_CoM_height;
     gl.frame_change = true;
     gl.terr_normal = Vector3d(0,0,1.0);
+    gl.stance_legs = true;
 
     //replanning
     time_resolution = 1.0/planning_rate_; //TODO change if replanning less frequently,
@@ -141,14 +149,14 @@ void CrawlPlanner::starting(double time) {
     replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
     std::cout<<"replanningWindow is :"<<replanningWindow<< std::endl;
 
-    des_com_x.resize(horizon_size);
-    des_com_y.resize(horizon_size);
+    des_com_x.resize(horizon_size); des_com_x.setZero();
+    des_com_y.resize(horizon_size); des_com_x.setZero();
 
-    des_com_xd.resize(horizon_size);
-    des_com_yd.resize(horizon_size);
+    des_com_xd.resize(horizon_size); des_com_xd.setZero();
+    des_com_yd.resize(horizon_size); des_com_xd.setZero();
 
-    zmp_x.resize(horizon_size);
-    zmp_y.resize(horizon_size);
+    zmp_x.resize(horizon_size); zmp_x.setZero();
+    zmp_y.resize(horizon_size); zmp_y.setZero();
 
     //set initial state for com and feet
     actual_state_x(0) = gl.actual_CoM.x(rbd::X);
@@ -169,13 +177,9 @@ void CrawlPlanner::starting(double time) {
     initial_feet_y[RF] = (gl.actual_base.x + gl.Rt*gl.footPosDes[RF])(rbd::Y);
     initial_feet_y[LH] = (gl.actual_base.x + gl.Rt*gl.footPosDes[LH])(rbd::Y);
     initial_feet_y[RH] = (gl.actual_base.x + gl.Rt*gl.footPosDes[RH])(rbd::Y);
-
     for (int leg=0;leg<4;leg++){
         feetStates[leg].resize(horizon_size);
-        //set always stances
-        feetStates[leg].swing.setConstant(horizon_size,false);
         footHolds[leg].resize(2*number_of_steps);
-
     }
 
     printf("Crawl planner: finished starting\n");
@@ -184,6 +188,7 @@ void CrawlPlanner::starting(double time) {
 
 void CrawlPlanner::run(double time,
         double period) {
+    taskServoTime = time;
 
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
         // Getting the joint id
@@ -228,16 +233,23 @@ void CrawlPlanner::run(double time,
 
     //Run state-machine!
     //fills in the base and joints variables
-    //crawlStateMachine(time);
+    //crawlStateMachine(taskServoTime);
+
 
     /////////replanning
     if (replanningFlag)
     {
-
+        double sampleTime = sample*time_resolution;
         Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
 
-        if ((sample % replanningWindow) == 0)
+//        if (check_touch_down())
+//            prt("touchdown")
+
+//        if ((sample % replanningWindow) == 0)
+//        {
+        if (firstTime || touchDown)
         {
+
 
             //do the replan
             replanningStage++;
@@ -251,7 +263,7 @@ void CrawlPlanner::run(double time,
                 //use the desired one (just for debug)
                 for (int leg = 0; leg<4;leg++)
                 {
-                    //update feet with the actual stance (in the wf)
+                    //update feet  (in the wf!!!!!)
                     initial_feet_x[leg] = feetStates[leg].x(sampleW);
                     initial_feet_y[leg] = feetStates[leg].y(sampleW);
                 }
@@ -262,6 +274,8 @@ void CrawlPlanner::run(double time,
                 //            actual_state_x = Vector3d ( gl.actual_CoM.x(rbd::X),  gl.actual_CoM.xd(rbd::X), 0.0);
                 //            actual_state_y = Vector3d ( gl.actual_CoM.x(rbd::Y),  gl.actual_CoM.xd(rbd::Y), 0.0);
 
+
+
                 mySchedule->next();
             } else {
                 firstTime = false;
@@ -270,6 +284,7 @@ void CrawlPlanner::run(double time,
 
 
             //find the swing leg in sampleW and update the schedule to that and do the step
+
             myPlanner->printSwing(mySchedule->getCurrentSwing());
 
             //recompute the new steps from the actual step
@@ -281,6 +296,9 @@ void CrawlPlanner::run(double time,
                                     feetStates, footHolds,
                                     A, b, *myPlanner,
                                     mySchedule->getCurrentSwing());
+
+
+            print_foot_holds();
 
             //replan from the actual state and the new steps overwriting the jerk
             //        if (!optimizeVelocityFlag)
@@ -304,6 +322,8 @@ void CrawlPlanner::run(double time,
             viol = myPlanner->getConstraintViolation(feetStates);
             //reset the counter
             sampleW = 0;
+            std::cout<<"start stance"<<std::endl;
+            touchDown = false; //reset touchdown
 
         } else {
             sampleW++;
@@ -313,19 +333,52 @@ void CrawlPlanner::run(double time,
             des_com_pos.xd(rbd::X) = des_com_xd(sampleW);
             des_com_pos.xd(rbd::Y) = des_com_yd(sampleW);
 
-            //set des feet
+            //whenever a liftoff is expected set the swing params
+            LegBoolMap liftOffFlag = detectLiftOff(feetStates, sampleW);
+
             for (int leg = LF ; leg <=RH; leg++)
             {
-                if (!feetStates[leg].swing(sampleW))
+                if (liftOffFlag[leg])
                 {
-                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
-                } else {
-                    //work out the new swing foot
-                    gl.footPosDes[leg].segment(rbd::X, 2) = Vector2d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW)) - Vector2d(des_com_x(sampleW), des_com_y(sampleW)) + (gl.Rt*gl.offCoM).segment(rbd::X,2);
+
+                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
                     gl.stance_legs[leg] = false;
+                    std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
                 }
             }
 
+
+           // set des feet            //only desired values
+//            for (int leg = LF ; leg <=RH; leg++)
+//            {
+//                if (!feetStates[leg].swing(sampleW))
+//                {
+//                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
+//                } else {
+//                    //work out the new swing foot
+//                    gl.footPosDes[leg].segment(rbd::X, 2) = Vector2d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW)) - Vector2d(des_com_x(sampleW), des_com_y(sampleW)) + (gl.Rt*gl.offCoM).segment(rbd::X,2);
+//                    gl.stance_legs[leg] = false;
+//                }
+//            }
+
+            for (int leg = LF ; leg <=RH; leg++)
+            {
+                if (!gl.stance_legs[leg])
+                {
+                    //for the swing set  the trajectory
+                    footSpliner[leg].getPoint(sampleTime, gl.swingFootRef[leg]);
+                    gl.footPosDes[leg] = gl.swingFootRef[leg].x;
+                    gl.footVelDes[leg] = gl.swingFootRef[leg].xd;
+
+                    //detect touchdown programmatically
+                    if (!feetStates[leg].swing(sampleW))
+                    {
+                        gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
+                        touchDown = true;
+                        std::cout<<"touchdown  "<<legmap[leg]<<" leg"<<std::endl;
+                    }
+                 }
+            }
             display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
                                  0.1,
                                  dwl::Color(dwl::ColorType::Green,1.),
@@ -333,7 +386,6 @@ void CrawlPlanner::run(double time,
         }
         sample++;
         //////////////////////////
-
 
         //plotting footsteps and com trajectory
         for (int i=0; i<footHolds[LF].x.size(); i++)
@@ -368,6 +420,7 @@ void CrawlPlanner::run(double time,
                                      "world");
             }
         }
+
         //plot com / zmp trajectory on ground plane
         for (int i=0; i<zmp_x.size(); i++)
         {
@@ -380,7 +433,11 @@ void CrawlPlanner::run(double time,
                                      "world");
             }
         }
+
+
+
     }
+
 
 
     //map com motion into feet motion
@@ -390,7 +447,7 @@ void CrawlPlanner::run(double time,
     ik_->getJointState(gl.footPosDes,
                        gl.footVelDes,
                        des_q_, des_qd_, gl.useKinematicLimitsFlag,
-                       gl.endStopViolation);
+                      gl.endStopViolation);
 
 
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
@@ -477,23 +534,40 @@ void CrawlPlanner::debug()
                             mySchedule->getCurrentSwing());
                             //,Vector2d(gl.actual_CoM.x(rbd::X), gl.actual_CoM.x(rbd::Y)));
 
-//    for (int i=0; i<footHolds[LF].x.size(); i++)
-//    {
-//        if ((i % 2) == 0)
-//               prt(footHolds[LF].x[i])
-//    }
-//    for (int i=0; i<footHolds[LF].x.size(); i++)
-//    {
-//         if ((i % 2) == 0)
-//            prt(footHolds[LF].y[i])
-//    }
+    print_foot_holds();
     myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,
                                         actual_state_x, actual_state_y,
                                         A,b,jerk_x,jerk_y);
     myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_x);
     myPlanner->computeCOMtrajectory( actual_state_y, jerk_y, des_com_y);
+    myPlanner->computeZMPtrajectory( actual_state_x, jerk_x, zmp_x);
+    myPlanner->computeZMPtrajectory( actual_state_y, jerk_y, zmp_y);
 
+}
 
+void CrawlPlanner::print_foot_holds()
+{
+    for (int leg=LF; leg<=RH; leg++)
+    {
+        std::cout<<std::endl;
+        std::cout<<std::endl;
+        std::cout<<legmap[leg]<<" X : ";
+        for (int i=0; i<footHolds[leg].x.size(); i++)
+        {
+            if ((i % 2) == 0)
+                std::cout<<footHolds[leg].x[i]<<"     ";
+
+        }
+
+//        std::cout<<std::endl;
+//        std::cout<<legmap[leg]<<" Y : ";
+//        for (int i=0; i<footHolds[leg].y.size(); i++)
+//        {
+//            if ((i % 2) == 0)
+//                std::cout<<footHolds[leg].y[i]<<"     ";
+//        }
+    }
+    std::cout<<std::endl;
 }
 
 
@@ -506,7 +580,6 @@ void CrawlPlanner::kill() {
 
 void CrawlPlanner::crawlStateMachine(double time)
 {
-    taskServoTime = time;
 
     //get the current swing
     swing_leg_index = mySchedule->getCurrentSwing();
@@ -743,18 +816,7 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
     if (!hapticCrawl){
         stop_condition = swingTimer.isTimeElapsed(time); //nohaptic
     } else {
-        iit::dog::LegDataMap<FootJac > JFootDes;
-        JFootDes[LF] = gl.feet_jacobians_->getFootJacobian(des_q_,LF);
-        JFootDes[RF] = gl.feet_jacobians_->getFootJacobian(des_q_,RF);
-        JFootDes[LH] = gl.feet_jacobians_->getFootJacobian(des_q_,LH);
-        JFootDes[RH] = gl.feet_jacobians_->getFootJacobian(des_q_,RH);
-
-        double sigma_ws_limit;
-        sigma_ws_limit = 0.009; //this is good also for hyqreal
-
-        //verify if there is any endstop force and discart triggering with force in that case (do not consider it for knee joint! otherwise if the sigma is different for each robot it will not stop)
-        bool jointLimitsHit = (gl.endStopViolation[toJointID(swing_leg_index, iit::dog::HAA)]|| gl.endStopViolation[toJointID(swing_leg_index, iit::dog::HFE)]);
-        stop_condition = footSpliner[swing_leg_index].check_stop_condition(jointLimitsHit, JFootDes[swing_leg_index], sigma_ws_limit, gl.grForces[swing_leg_index], force_th);
+        stop_condition = check_touch_down();
     }
 
     if (stop_condition){
@@ -765,6 +827,22 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
 
     }
     return false;
+}
+
+bool CrawlPlanner::check_touch_down()
+{
+    iit::dog::LegDataMap<FootJac > JFootDes;
+    JFootDes[LF] = gl.feet_jacobians_->getFootJacobian(des_q_,LF);
+    JFootDes[RF] = gl.feet_jacobians_->getFootJacobian(des_q_,RF);
+    JFootDes[LH] = gl.feet_jacobians_->getFootJacobian(des_q_,LH);
+    JFootDes[RH] = gl.feet_jacobians_->getFootJacobian(des_q_,RH);
+
+    double sigma_ws_limit;
+    sigma_ws_limit = 0.009; //this is good also for hyqreal
+
+    //verify if there is any endstop force and discart triggering with force in that case (do not consider it for knee joint! otherwise if the sigma is different for each robot it will not stop)
+    bool jointLimitsHit = (gl.endStopViolation[toJointID(swing_leg_index, iit::dog::HAA)]|| gl.endStopViolation[toJointID(swing_leg_index, iit::dog::HFE)]);
+    return footSpliner[swing_leg_index].check_stop_condition(jointLimitsHit, JFootDes[swing_leg_index], sigma_ws_limit, gl.grForces[swing_leg_index], force_th);
 }
 
 void CrawlPlanner::update_phase_duration(double new_cycle_time){
@@ -805,7 +883,6 @@ void CrawlPlanner::start_replanning_crawl()
  sampleW = 0;
  firstTime = true;
  replanningFlag = true;
-
 }
 
 void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet_jacs,
@@ -840,5 +917,16 @@ void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet
     gl.limits = limits;
 }
 
+LegBoolMap  CrawlPlanner::detectLiftOff(iit::dog::LegDataMap<MPCPlanner::footState> feetStates, double actualSample)
+{
+    LegBoolMap swingTrigger = false;
+    for(int leg = LF; leg<=RH; leg++ )
+    {
+        //detect only rising edge
+        if ((!feetStates[leg].swing(actualSample-1)) && (feetStates[leg].swing(actualSample)))
+            swingTrigger[leg] = true;
+    }
+    return swingTrigger;
+}
 
 }//namespace

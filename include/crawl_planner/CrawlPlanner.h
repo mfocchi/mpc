@@ -32,8 +32,10 @@
 #include <crawl_controller/StepHandler.h>
 #include <crawl_controller/BodyTargetHandler.h>
 
+
 //replanning
 #include <crawl_planner/MPCPlanner.h>
+#include <crawl_planner/SwingManager.h>
 
 namespace dls_planner
 {
@@ -41,6 +43,9 @@ namespace dls_planner
 class CrawlPlanner : public dls_planner::PlannerBase
 {
 public:
+
+    std::map<int, std::string> legmap;
+
     /** @brief Constructor function */
     CrawlPlanner();
 
@@ -102,20 +107,20 @@ protected:
     bool update_load_force(dog::LegID swing_leg_index, double time);
     void update_leg_correction(dog::LegID swing_leg_index, double time);
     bool update_swing_position(dog::LegID swing_leg_index, double time);
+    bool check_touch_down();
     void update_phase_duration(double cycle_time);
     void start_crawl();
-    void start_replanning_crawl();
-
     void crawlStateMachine(double time);
-
     void addVarToCollect( double value, std::string var_name);
     void updateVarsForDataLogging();
-
     void computeTerrainEstimation();
-    void debug();
 
     /////////////////////////////
     //replanning stuff
+    void debug();
+    void start_replanning_crawl();
+    void print_foot_holds();
+    iit::dog::LegBoolMap detectLiftOff(iit::dog::LegDataMap<MPCPlanner::footState> feetStates, double actualSample);
     void computeSteps(const Vector2d & userSpeed,
                       const iit::dog::LegDataMap<double> & initial_feet_x, const iit::dog::LegDataMap<double> & initial_feet_y,
                       const int number_of_steps, const int horizon_size,
@@ -128,10 +133,11 @@ protected:
     void plotZMPtraj();
 
 
+
        //init params for MPC
-    double horizon_duration = 6.0;
+    double horizon_duration = 2.0;
     int horizon_size = 0.0;//10 default for tests
-    int number_of_steps = 6;
+    int number_of_steps = 4;
     int replanningWindow = 0.0;
     int sample = 0, sampleW = 0, replanningStage = 0;
     bool firstTime = true;
@@ -155,6 +161,8 @@ protected:
     int replanningFlag = false;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
+    bool touchDown = false;
+
     double disturbance = 0.0;
     std::shared_ptr<MPCPlanner> myPlanner;
 
@@ -171,6 +179,7 @@ protected:
     TaskGlobals gl;
     std::shared_ptr<StepHandler>  stepHandler;
     std::shared_ptr<BodyTargetHandler> bodyTargetHandler;
+    std::shared_ptr<SwingManager> swingManager;
     std::shared_ptr<BaseState > bs;
     CTerrainEstimator terrainEstimator;
 
