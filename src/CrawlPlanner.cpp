@@ -29,6 +29,10 @@ bool CrawlPlanner::init()
     addConsoleFunction("startCrawl",
                        "crawl on with virtual model on",
                        &CrawlPlanner::start_crawl, this);
+
+    addConsoleFunction("debug",
+                       "debug",
+                       &CrawlPlanner::debug, this);
     //init crawl state machine
     state_machine = idle;
 
@@ -44,19 +48,66 @@ bool CrawlPlanner::init()
     return true;
 }
 
-void CrawlPlanner::printCharOptions()
+void CrawlPlanner::debug()
 {
-    std::cout << "Menu options " << std::endl;
-    std::cout << "(to send command use - rosrun dls_console dls_console) " << std::endl;
-    std::cout << "(topic should be /robot/char) " << std::endl;
-    std::cout << "- f to move forward " << std::endl;
+    initial_feet_x[LF] = gl.footPosDes[LF](rbd::X);
+    initial_feet_x[RF] = gl.footPosDes[RF](rbd::X);
+    initial_feet_x[LH] = gl.footPosDes[LH](rbd::X);
+    initial_feet_x[RH] = gl.footPosDes[RH](rbd::X);
+    //init y all the same
+    initial_feet_y[LF] = gl.footPosDes[LF](rbd::Y);
+    initial_feet_y[RF] = gl.footPosDes[RF](rbd::Y);
+    initial_feet_y[LH] = gl.footPosDes[LH](rbd::Y);
+    initial_feet_y[RH] = gl.footPosDes[RH](rbd::Y);
+
+    initial_state_x(0) = gl.actual_CoM.x(rbd::X);
+    initial_state_x(1) = gl.actual_CoM.xd(rbd::X);
+    initial_state_x(2) = 0.0;
+
+    initial_state_y(0) = gl.actual_CoM.x(rbd::Y);
+    initial_state_y(1) = gl.actual_CoM.xd(rbd::Y);
+    initial_state_y(2) = 0.0;
+
+
+    Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
+    //single plan
+    myPlanner->computeSteps(userSpeed,
+                            initial_feet_x,
+                            initial_feet_y,
+                            distance,
+                            number_of_steps,
+                            horizon_size,
+                            feetStates, footHolds,
+                            A, b, *myPlanner,
+                            mySchedule->getCurrentSwing());
+                            //,Vector2d(gl.actual_CoM.x(rbd::X), gl.actual_CoM.x(rbd::Y)));
+
+    for (int i=0; i<footHolds[LF].x.size(); i++)
+    {
+        if ((i % 2) == 0)
+               prt(footHolds[LF].x[i])
+    }
+    for (int i=0; i<footHolds[LF].x.size(); i++)
+    {
+         if ((i % 2) == 0)
+            prt(footHolds[LF].y[i])
+    }
+
+    //plotSteps()
+
+    myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,
+                                        initial_state_x, initial_state_y,
+                                        A,b,jerk_x,jerk_y);
+    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, des_com_x);
+    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, des_com_y);
+
 
 }
 
 void CrawlPlanner::starting(double time) {
     std::cout << "Starting CrawlPlanner controller at " << time << " sec.";
     std::cout << std::endl;
-    //printCharOptions();
+
     //crawl init
     printf("chimney plan starting\n");
 
@@ -128,11 +179,20 @@ void CrawlPlanner::starting(double time) {
     gl.terr_normal = Vector3d(0,0,1.0);
 
     //replanning
-    Ts = 1.0/planning_rate_;
-    myPlanner.reset(new MPCPlanner(horizon_size,    Ts,    9.81));
-    std::cout<<"Ts is :"<<Ts<< std::endl;
-    zmpLimX.resize(horizon_size);
-    zmpLimY.resize(horizon_size);
+    time_resolution = 1.0/planning_rate_; //TODO change if replanning less frequently,
+    horizon_size = horizon_duration / time_resolution;
+    myPlanner.reset(new MPCPlanner(horizon_size,    time_resolution,   rbd::g));
+    std::cout<<"horizon_duration is :"<<horizon_duration<< std::endl;
+    std::cout<<"time_resolution is :"<<time_resolution<< std::endl;
+    std::cout<<"horizon size is :"<<horizon_size<< std::endl;
+
+
+    std::cout<<"number of steps is :"<<number_of_steps<< std::endl;
+
+    std::cout<<"userspeed is X:"<<linearSpeedX <<"  Y: "<<linearSpeedY << std::endl;
+    des_com_x.resize(horizon_size);
+    des_com_y.resize(horizon_size);
+
     initial_state_x(0) = gl.actual_CoM.x(rbd::X);
     initial_state_x(1) = gl.actual_CoM.xd(rbd::X);
     initial_state_x(2) = 0.0;
@@ -189,48 +249,61 @@ void CrawlPlanner::run(double time,
     }
 
 
-
-
     //Run state-machine!
     //fills in the base and joints variables
     //crawlStateMachine(time);
 
 
-    //replanning
-    computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, *myPlanner);
-    myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
-    viol = myPlanner->getConstraintViolation(feetStates);
-    prt(jerk_x.transpose())
-    prt(jerk_y.transpose())
-    myPlanner->computeZMPtrajectory( initial_state_x, jerk_x, zmp_x);
-    myPlanner->computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);
-    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_x);
-    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_y);
-    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
-    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
+    //////////////////////////
 
-    for (int i=0; i<number_of_steps; i++)
+
+
+//    viol = myPlanner->getConstraintViolation(feetStates);
+//    prt(jerk_x.transpose())
+//    prt(jerk_y.transpose())
+//    myPlanner->computeZMPtrajectory( initial_state_x, jerk_x, zmp_x);
+//    myPlanner->computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);
+//    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_x);
+//    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_y);
+//    myPlanner->computeCOMtrajectory( initial_state_x, jerk_x, com_xd, MPCPlanner::VELOCITY);
+//    myPlanner->computeCOMtrajectory( initial_state_y, jerk_y, com_yd, MPCPlanner::VELOCITY);
+
+
+
+
+    for (int i=0; i<footHolds[LF].x.size(); i++)
     {
-
+        double transparency = (footHolds[LF].x.size() - i)/footHolds[LF].x.size();
         display_->drawSphere(Vector3d(footHolds[LF].x(i),footHolds[LF].y(i),0.0),
                              0.05,
-                             dwl::Color(dwl::ColorType::Green, 1.),
+                             dwl::Color(dwl::ColorType::Red, 0.1 + 0.9*transparency),
                              "world");
-
-        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[LF].y(i),0.0),
+        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[RF].y(i),0.0),
                                      0.05,
-                                     dwl::Color(dwl::ColorType::Green, 1.),
+                                     dwl::Color(dwl::ColorType::Blue, 0.1 + 0.9*transparency),
                                      "world");
-        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[LH].y(i),0.0),
+        display_->drawSphere(Vector3d(footHolds[LH].x(i),footHolds[LH].y(i),0.0),
                              0.05,
-                             dwl::Color(dwl::ColorType::Red, 1.),
+                             dwl::Color(dwl::ColorType::Green, 0.1 + 0.9*transparency),
                              "world");
-        display_->drawSphere(Vector3d(footHolds[RF].x(i),footHolds[RH].y(i),0.0),
+        display_->drawSphere(Vector3d(footHolds[RH].x(i),footHolds[RH].y(i),0.0),
                              0.05,
-                             dwl::Color(dwl::ColorType::Red, 1.),
+                             dwl::Color(dwl::ColorType::Yellow, 0.1 + 0.9*transparency),
                              "world");
 
     }
+
+    //plot com trajectory on ground plane
+    for (int i=0; i<des_com_x.size(); i++)
+    {
+        double transparency = (des_com_x.size() - i)/des_com_x.size();
+        display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
+                             0.05,
+                             dwl::Color(dwl::ColorType::Black, 0.1 + 0.9*transparency),
+                             "world");
+    }
+
+
     ///////////////////////////
 
     //map com motion into feet motion
@@ -335,8 +408,7 @@ void CrawlPlanner::crawlStateMachine(double time)
 	            //compute next base position
 	            Vector3d new_triangle_baryW, new_triangle_baryWoff;
 	            //get coord of bary in world frame
-	            Matrix3d Rdes = commons::rpyToRot(gl.des_base_orient.x);
-	            bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal, stab_margin, new_triangle_baryW);
+                bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal, stab_margin, new_triangle_baryW);
 	            prt(gl.terr_normal)
 	            prt(gl.R)
 	            prt(gl.footPos)
@@ -399,7 +471,6 @@ void CrawlPlanner::crawlStateMachine(double time)
         gl.stance_legs_odometry[swing_leg_index] = false;
         gl.frame_change = true;
 
-        dog::LegDataMap<Eigen::Vector3d> zero_vel = Eigen::Vector3d(0,0,0);
         //this is important to prevent discontinuities on the torque which can cause instabilities
         //in the dynamics casecause I set the swing leg on but I compute the
         //reference for swing only the next iteration
@@ -639,222 +710,6 @@ void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet
     gl.default_pg = params;
     gl.limits = limits;
 }
-
-
-void CrawlPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
-                  double distance, const int number_of_steps, const int horizon_size,
-                  LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, dog::LegID swing_leg_index, Vector2d  initialCoM)
-{
-
-    FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
-    schedule.setCurrentSwing(swing_leg_index);
-    int start_phase_index,  phase_duration, number_of_constraints;
-    double distance_per_step = distance/number_of_steps;
-    int step_knots = floor(horizon_size/number_of_steps);
-    LegDataMap<double> feetValuesX, feetValuesY;
-
-    feetValuesX = initial_feet_x;
-    feetValuesY = initial_feet_y;
-
-    //init stuff
-    number_of_constraints = 0;
-    start_phase_index = 0;
-    phase_duration = step_knots/2; //10 samples both swing and phase
-    A.resize((4+4)*phase_duration*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
-    b.resize((4+4)*phase_duration*number_of_steps);
-    A.setZero();
-    b.setZero();
-
-
-    for (int leg=0;leg<4;leg++){
-        feetStates[leg].resize(horizon_size);
-        //set always stances
-        feetStates[leg].swing.setConstant(horizon_size,false);
-        footHolds[leg].resize(2*number_of_steps);
-
-    }
-    prt(initialCoM(rbd::Y))
-
-    LegDataMap<bool> comCorrectionFlag = false;
-    LegDataMap<double> comCorrectionValue = 0.0;
-    if (!initialCoM.isZero(0))
-    {
-        comCorrectionFlag = true;
-        comCorrectionValue[LF] = initialCoM(rbd::Y) +1.0 - feetValuesY[LF];
-        comCorrectionValue[RF] = initialCoM(rbd::Y) -1.0 - feetValuesY[RF];
-        comCorrectionValue[LH] = initialCoM(rbd::Y) +1.0 - feetValuesY[LH];
-        comCorrectionValue[RH] = initialCoM(rbd::Y) -1.0 - feetValuesY[RH];
-
-        prt(feetValuesY)
-    }
-
-    //prt(phase_duration)
-    for (int i=0; i<number_of_steps;i++)
-    {
-        //4 stance///////////////////////////
-        feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
-        feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
-        feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
-        feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
-        feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
-        feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
-        feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
-        feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
-        //save footholds
-        footHolds[LF].x(2*i) = feetValuesX[LF]; footHolds[LF].y(2*i) = feetValuesY[LF];
-        footHolds[RF].x(2*i) = feetValuesX[RF]; footHolds[RF].y(2*i) = feetValuesY[RF];
-        footHolds[LH].x(2*i) = feetValuesX[LH]; footHolds[LH].y(2*i) = feetValuesY[LH];
-        footHolds[RH].x(2*i) = feetValuesX[RH]; footHolds[RH].y(2*i) = feetValuesY[RH];
-        //build inequalities with the set of stance feet and positions
-        myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration, horizon_size, A,  b,  number_of_constraints );
-        start_phase_index += phase_duration;
-
-        //3 stance/////////////////////////////////////
-        //step
-        if (comCorrectionFlag[schedule.getCurrentSwing()])
-        {
-
-            //std::cout<< "correxcting com: " <<comCorrectionValue[schedule.getCurrentSwing()]<<std::endl;
-            feetValuesY[schedule.getCurrentSwing()]+= comCorrectionValue[schedule.getCurrentSwing()];
-            comCorrectionFlag[schedule.getCurrentSwing()] = false;
-        }
-        //default stepping
-        feetValuesX[schedule.getCurrentSwing()]+=  userSpeed(0); //old         feetValuesX[schedule.getCurrentSwing()]+= distance_per_step
-        feetValuesY[schedule.getCurrentSwing()]+=  userSpeed(1); //old 0.1
-
-
-        //set swing for that leg
-        feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
-        feetStates[LF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LF]);
-        feetStates[RF].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RF]);
-        feetStates[LH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[LH]);
-        feetStates[RH].x.segment(start_phase_index, phase_duration).setConstant(feetValuesX[RH]);
-        feetStates[LF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LF]);
-        feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
-        feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
-        feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
-        //save footholds
-        footHolds[LF].x(2*i + 1) = feetValuesX[LF]; footHolds[LF].y(2*i +1) = feetValuesY[LF];
-        footHolds[RF].x(2*i + 1) = feetValuesX[RF]; footHolds[RF].y(2*i +1) = feetValuesY[RF];
-        footHolds[LH].x(2*i + 1) = feetValuesX[LH]; footHolds[LH].y(2*i +1) = feetValuesY[LH];
-        footHolds[RH].x(2*i + 1) = feetValuesX[RH]; footHolds[RH].y(2*i +1) = feetValuesY[RH];
-    //    //build inequalities with the set of stance feet and positions
-        myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration,horizon_size, A,  b,  number_of_constraints );
-        start_phase_index += phase_duration;
-        schedule.next(); //update the step in the schedule
-    }
-    //compute missing knots last phase is double stance
-    int missing_knots = horizon_size - start_phase_index;
-    //end with 4 stance
-    feetStates[LF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LF]);
-    feetStates[RF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RF]);
-    feetStates[LH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LH]);
-    feetStates[RH].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RH]);
-    feetStates[LF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LF]);
-    feetStates[RF].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RF]);
-    feetStates[LH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[LH]);
-    feetStates[RH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RH]);
-
-    myPlanner.buildPolygonMatrix(feetStates, start_phase_index,missing_knots,horizon_size, A,  b,  number_of_constraints);
-    //cause you have 3 stances
-    A.conservativeResize(number_of_constraints,horizon_size*2);
-    b.conservativeResize(number_of_constraints);
-    //prt(missing_knots)
-}
-
-void CrawlPlanner::computeSteps(const LegDataMap<double> & initial_feet_x, const LegDataMap<double> & initial_feet_y,
-                  double distance, const int number_of_steps, const int horizon_size,
-                  LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
-                  MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner)
-{
-    computeSteps(Vector2d(distance/number_of_steps, 0.0), initial_feet_x, initial_feet_y,
-            distance,  number_of_steps, horizon_size,
-            feetStates,  footHolds,
-            A,  b,  myPlanner, LF);
-
-}
-
-//void CrawlController::fill_ZMP_traj(LegID preview_start_swing_index, LegDataMap<Vector3d> sampleFootPosDes, double missingTime)//TODO input actual current swing leg and remaining time
-//{
-//    int count = 0;
-//    LegID swing_index;
-//    LegDataMap<Vector3d> footDesTraj;
-//    Vector3d actualzmp;actualzmp.setZero(); //first value is done by the feet pos
-//    Vector3d triangle_bary;
-//    FootScheduler ZMPSchedule(RH, RF, LH, LF);
-//    ZMPSchedule.setCurrentSwing(preview_start_swing_index);
-//
-//    int num_samples_swing = floor(swingTrajDuration*taskServoRate);
-//    int num_samples_to_TD = floor(missingTime*taskServoRate);
-//    double stab_margin = 0.15;
-//    zmp_traj.resize(2, num_traj_samples);
-//    footDesTraj = sampleFootPosDes;
-//
-//    //start filling the buffer with the uncomplete 1 st step
-//    swing_index = ZMPSchedule.getCurrentSwing();
-//
-//    Matrix3d Rdes = commons::rpyToRot(Vector3d(0,0,0));
-//    bodyTargetHandler->computeBaryNextTriangle(Rdes, swing_index, footDesTraj, Vector3d(0,0,1), stab_margin, triangle_bary);
-//    actualzmp.segment(rbd::X,2) += triangle_bary.segment(rbd::X,2);
-//    actualzmp(rbd::Z) = gl.des_height;
-//
-//
-//
-//    //the step has already been done
-//    zmp_traj.block(rbd::X, 0, 1, num_samples_to_TD) = actualzmp(rbd::X)*MatrixXd::Ones(1, num_samples_to_TD);
-//    zmp_traj.block(rbd::Y, 0, 1, num_samples_to_TD) = actualzmp(rbd::Y)*MatrixXd::Ones(1, num_samples_to_TD);
-//    footDesTraj[swing_index] +=Vector3d(ZMPstep_x, ZMPstep_y,0.0);//TODO replace with stephandler compute steps
-//    count = count +num_samples_to_TD;
-//    //gl.print_swing_leg(swing_index);
-//    //prt(triangle_bary)
-//    //prt(footDesTraj)
-//    ZMPSchedule.next();
-//
-//    while (count<=num_traj_samples)
-//    {
-//        swing_index = ZMPSchedule.getCurrentSwing();
-//
-//
-//
-//        bodyTargetHandler->computeBaryNextTriangle(Rdes, swing_index, footDesTraj, Vector3d(0,0,1), stab_margin, triangle_bary);
-//        actualzmp.segment(rbd::X,2) += triangle_bary.segment(rbd::X,2);
-//        actualzmp(rbd::Z) = gl.des_height;
-//        if ((count+num_samples_swing)<=zmp_traj.cols()){
-//            zmp_traj.block(rbd::X, count, 1, num_samples_swing) = actualzmp(rbd::X)*MatrixXd::Ones(1, num_samples_swing);
-//            zmp_traj.block(rbd::Y, count, 1, num_samples_swing) = actualzmp(rbd::Y)*MatrixXd::Ones(1, num_samples_swing);
-//        }else
-//        {
-//            zmp_traj.block(rbd::X, count, 1, zmp_traj.cols()-count) =  actualzmp(rbd::X)*MatrixXd::Ones(1, zmp_traj.size()-count);
-//            zmp_traj.block(rbd::Y, count, 1, zmp_traj.cols()-count) = actualzmp(rbd::Y)*MatrixXd::Ones(1, zmp_traj.size()-count);
-//        }
-//        footDesTraj[swing_index] +=Vector3d(ZMPstep_x, ZMPstep_y,0.0);//TODO replace with stephandler compute steps
-//        count += num_samples_swing;
-//        //gl.print_swing_leg(swing_index);
-//        //prt(triangle_bary)
-//        //prt(footDesTraj)
-//        ZMPSchedule.next();
-//
-//    }
-//    zmp(rbd::X) = zmp_traj(0,0);
-//    zmp(rbd::Y) = zmp_traj(1,0);
-//    //zmp_150(rbd::X) = zmp_traj(0,150);
-//    //zmp_150(rbd::Y) = zmp_traj(1,150);
-//
-//    //prt(zmp_traj)
-//}
-//
-//void CrawlController::plotZMPtraj()
-//{
-//    fill_ZMP_traj(iit::dog::RH, gl.footPosDes, 1.0);
-//    plotTimer.setDuration(dt*num_traj_samples);
-//    plotTimer.startTimer(taskServoTime);
-//    plotZMPFlag = true;
-//}
-
-
-
-//TODO implement client server to strt trunk contr
 
 
 }//namespace

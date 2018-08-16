@@ -111,53 +111,54 @@ protected:
     void updateVarsForDataLogging();
 
     void computeTerrainEstimation();
-    void printCharOptions();
+    void debug();
 
+    /////////////////////////////
     //replanning stuff
     void computeSteps(const Vector2d & userSpeed,
                       const iit::dog::LegDataMap<double> & initial_feet_x, const iit::dog::LegDataMap<double> & initial_feet_y,
-                      const double distance, const int number_of_steps, const int horizon_size,
+                      const int number_of_steps, const int horizon_size,
                       iit::dog::LegDataMap<MPCPlanner::footState> & feetStates,
                       iit::dog::LegDataMap<MPCPlanner::footState> & footHolds,
                       MatrixXd & A,  VectorXd & b,
                       MPCPlanner & myPlanner,
                       dog::LegID swing_leg_index,
                       Vector2d initialCoM = Vector2d::Zero());
+    void plotZMPtraj();
 
 
-    void computeSteps(const iit::dog::LegDataMap<double> & initial_feet_x, const iit::dog::LegDataMap<double> & initial_feet_y,
-                      const double distance, const int number_of_steps, const int horizon_size,
-                      iit::dog::LegDataMap<MPCPlanner::footState> & feetStates,
-                      iit::dog::LegDataMap<MPCPlanner::footState> & footHolds,
-                      MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner);
-
-
-    //init params
-    int horizon_size = 200;//10 default for tests
-    int number_of_steps = 6;
+       //init params for MPC
+    double horizon_duration = 2.0;
+    int horizon_size = 0.0;//10 default for tests
+    int number_of_steps = 20;
     double distance = 3.0;
     int experiment_duration = 60;
 
     double lateral_bound = 0.2;
-    double Ts = 0.1;
+    double time_resolution = 0.1;
     double weight_R = 1e-06;
     double weight_Q = 1;
 
-    VectorXd  jerk_x, jerk_y;
-    Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
-    Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
-    VectorXd zmp_x, zmp_y, com_x, com_y, viol, com_xd, com_yd;
+    Eigen::VectorXd  jerk_x, jerk_y;
+    Eigen::VectorXd  des_com_x, des_com_y;
+    Eigen::Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
+    Eigen::Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
+    Eigen::VectorXd zmp_x, zmp_y, com_x, com_y, viol, com_xd, com_yd;
     iit::dog::LegDataMap<MPCPlanner::footState> feetStates;
     iit::dog::LegDataMap<MPCPlanner::footState> footHolds;
     iit::dog::LegDataMap<double> initial_feet_x;
     iit::dog::LegDataMap<double> initial_feet_y;
-    MPCPlanner::BoxLimits zmpLimX, zmpLimY;
-    MatrixXd A; VectorXd b;
+    Eigen::MatrixXd A; VectorXd b;
     int replanningFlag = true;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
     double disturbance = 0.0;
     std::shared_ptr<MPCPlanner> myPlanner;
+
+
+
+    //replanning stuff
+    /////////////////////////////
 
 
     //void changeCrawlParams(); TODO
@@ -214,6 +215,7 @@ protected:
     dog::LegDataMap<dog::FootSpliner> footSpliner;
     Timer baseTimer, forceTimer, swingTimer;
     std::shared_ptr<FootScheduler>  mySchedule;
+
     iit::planning::Point3d des_com_pos, des_com_posB;
     //timers
     double base_motion_duration;

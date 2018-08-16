@@ -793,6 +793,7 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
                   MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner, dog::LegID swing_leg_index, Vector2d  initialCoM)
 {
 
+    //use internal schedule to predict the steps (assume default schedule sequence TODO)
     FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
     schedule.setCurrentSwing(swing_leg_index);
     int start_phase_index,  phase_duration, number_of_constraints;
@@ -903,7 +904,7 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     feetStates[RH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RH]);
 
     myPlanner.buildPolygonMatrix(feetStates, start_phase_index,missing_knots,horizon_size, A,  b,  number_of_constraints);
-    //cause you have 3 stances
+    //cause you have 3 stances phases and you need to shrink
     A.conservativeResize(number_of_constraints,horizon_size*2);
     b.conservativeResize(number_of_constraints);
     //prt(missing_knots)
