@@ -1,5 +1,5 @@
 #include <crawl_planner/CrawlPlanner.h>
-
+#include <dls_controller/support/ConsoleUtility.h>
 
 using namespace Eigen;
 using namespace std;
@@ -135,6 +135,8 @@ void CrawlPlanner::starting(double time) {
     std::cout<<"time_resolution is :"<<time_resolution<< std::endl;
     std::cout<<"horizon size is :"<<horizon_size<< std::endl;
     std::cout<<"number of steps is :"<<number_of_steps<< std::endl;
+
+
     std::cout<<"userspeed is X:"<<linearSpeedX <<"  Y: "<<linearSpeedY << std::endl;
     replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
     std::cout<<"replanningWindow is :"<<replanningWindow<< std::endl;
@@ -274,7 +276,6 @@ void CrawlPlanner::run(double time,
             myPlanner->computeSteps(userSpeed,
                                     initial_feet_x,
                                     initial_feet_y,
-                                    distance,
                                     number_of_steps,
                                     horizon_size,
                                     feetStates, footHolds,
@@ -469,7 +470,6 @@ void CrawlPlanner::debug()
     myPlanner->computeSteps(userSpeed,
                             initial_feet_x,
                             initial_feet_y,
-                            distance,
                             number_of_steps,
                             horizon_size,
                             feetStates, footHolds,
@@ -800,11 +800,12 @@ void CrawlPlanner::start_crawl(void)
 
 void CrawlPlanner::start_replanning_crawl()
 {
-
+ newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
  sample = 0;
  sampleW = 0;
  firstTime = true;
  replanningFlag = true;
+
 }
 
 void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet_jacs,

@@ -139,11 +139,11 @@ int main()
             //recompute the new steps from the actual step
             if (useComStepCorrection)
             {
-                myPlanner.computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
+                myPlanner.computeSteps(userSpeed,  initial_feet_x, initial_feet_y,
                                        number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
                                        replanning_schedule.getCurrentSwing(), Vector2d(actual_state_x(0),actual_state_y(0)));
             } else {
-                myPlanner.computeSteps(userSpeed,  initial_feet_x, initial_feet_y, distance,
+                myPlanner.computeSteps(userSpeed,  initial_feet_x, initial_feet_y,
                                        number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,
                                        replanning_schedule.getCurrentSwing());
             }

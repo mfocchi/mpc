@@ -129,10 +129,9 @@ protected:
 
 
        //init params for MPC
-    double horizon_duration = 2.0;
+    double horizon_duration = 6.0;
     int horizon_size = 0.0;//10 default for tests
-    int number_of_steps = 20;
-    double distance = 3.0;
+    int number_of_steps = 6;
     int replanningWindow = 0.0;
     int sample = 0, sampleW = 0, replanningStage = 0;
     bool firstTime = true;
@@ -153,7 +152,7 @@ protected:
     iit::dog::LegDataMap<double> initial_feet_x;
     iit::dog::LegDataMap<double> initial_feet_y;
     Eigen::MatrixXd A; VectorXd b;
-    int replanningFlag = true;
+    int replanningFlag = false;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
     double disturbance = 0.0;

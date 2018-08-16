@@ -777,7 +777,7 @@ void MPCPlanner::computeSteps(const LegDataMap<double> & initial_feet_x,
                   MatrixXd & A,  VectorXd & b, MPCPlanner & myPlanner)
 {
     computeSteps(Vector2d(distance/number_of_steps, 0.0), initial_feet_x, initial_feet_y,
-            distance,  number_of_steps, horizon_size,
+            number_of_steps, horizon_size,
             feetStates,  footHolds,
             A,  b,  myPlanner, iit::dog::LF);
 
@@ -786,7 +786,6 @@ void MPCPlanner::computeSteps(const LegDataMap<double> & initial_feet_x,
 
 void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<double> & initial_feet_x,
                   const LegDataMap<double> & initial_feet_y,
-                  double distance,
                   const int number_of_steps,
                   const int horizon_size,
                   LegDataMap<MPCPlanner::footState> & feetStates, LegDataMap<MPCPlanner::footState> & footHolds,
@@ -797,7 +796,6 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     FootScheduler schedule; schedule.setSequence(LF, RH,RF,LH);
     schedule.setCurrentSwing(swing_leg_index);
     int start_phase_index,  phase_duration, number_of_constraints;
-    double distance_per_step = distance/number_of_steps;
     int step_knots = floor(horizon_size/number_of_steps);
     LegDataMap<double> feetValuesX, feetValuesY;
 
@@ -867,8 +865,8 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
             comCorrectionFlag[schedule.getCurrentSwing()] = false;
         }
         //default stepping
-        feetValuesX[schedule.getCurrentSwing()]+=  userSpeed(0); //old         feetValuesX[schedule.getCurrentSwing()]+= distance_per_step
-        feetValuesY[schedule.getCurrentSwing()]+=  userSpeed(1); //old 0.1
+        feetValuesX[schedule.getCurrentSwing()]+=  userSpeed(0); //TODO consider swing duration
+        feetValuesY[schedule.getCurrentSwing()]+=  userSpeed(1);
 
 
         //set swing for that leg

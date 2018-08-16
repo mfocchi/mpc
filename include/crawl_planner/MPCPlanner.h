@@ -102,7 +102,7 @@ class MPCPlanner
         void computeSteps(const Eigen::Vector2d & userSpeed,
                           const iit::dog::LegDataMap<double> & initial_feet_x,
                           const iit::dog::LegDataMap<double> & initial_feet_y,
-                          const double distance, const int number_of_steps, const int horizon_size,
+                          const int number_of_steps, const int horizon_size,
                           iit::dog::LegDataMap<MPCPlanner::footState> & feetStates,
                           iit::dog::LegDataMap<MPCPlanner::footState> & footHolds,
                           Eigen::MatrixXd & A,  Eigen::VectorXd & b, MPCPlanner & myPlanner,
