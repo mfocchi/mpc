@@ -131,14 +131,13 @@ protected:
                       dog::LegID swing_leg_index,
                       Vector2d initialCoM = Vector2d::Zero());
     void plotZMPtraj();
-
-
+    Vector3d mapBToWF(Vector3d B_vec_in);
     void interactiveChangeParams(void);
 
        //init params for MPC
-    double horizon_duration = 2.0;
+    double horizon_duration = 4.0;
     int horizon_size = 0.0;//10 default for tests
-    int number_of_steps = 4;
+    int number_of_steps = 8;
     int replanningWindow = 0.0;
     int sample = 0, sampleW = 0, replanningStage = 0;
     bool firstTime = true;

@@ -109,6 +109,8 @@ class MPCPlanner
                           iit::dog::LegID swing_leg_index,  Eigen::Vector2d initialCoM = Eigen::Vector2d::Zero());
         void printSwing(iit::dog::LegID swing);
 
+        void setHipOffsets(iit::dog::LegDataMap<Eigen::Vector2d> hip_offsets);
+
     private:
 
 
@@ -129,6 +131,8 @@ class MPCPlanner
         Eigen::Matrix<double,1,3> Ca;
         Eigen::MatrixXd Zx, Zu, Xpx, Xpu, Xvx, Xvu, Xax, Xau;
         double gravity_,height_;
+
+        iit::dog::LegDataMap<Eigen::Vector2d> hip_offsets;
 };
 
 

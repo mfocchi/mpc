@@ -188,6 +188,7 @@ void CrawlPlanner::starting(double time) {
         footHolds[leg].resize(2*number_of_steps);
     }
 
+
     printf("Crawl planner: finished starting\n");
 }
 
@@ -251,6 +252,7 @@ void CrawlPlanner::run(double time,
 //        if (check_touch_down())
 //            prt("touchdown")
 
+        //old fixed window
 //        if ((sample % replanningWindow) == 0)
 //        {
         if (firstTime || touchDown)
@@ -266,21 +268,31 @@ void CrawlPlanner::run(double time,
             //set initial state for optimization to actual state (there might have been disturbances)
             if (!firstTime)
             {
-                //use the desired one (just for debug)
+                //init feet
                 for (int leg = 0; leg<4;leg++)
                 {
-                    //update feet  (in the wf!!!!!)
-                    initial_feet_x[leg] = feetStates[leg].x(sampleW);
-                    initial_feet_y[leg] = feetStates[leg].y(sampleW);
+                    //desired values (in the wf!!!!!)  (just for debug)
+                    //initial_feet_x[leg] = feetStates[leg].x(sampleW);
+                    //initial_feet_y[leg] = feetStates[leg].y(sampleW);
+                    //footposdes
+                    //initial_feet_x[leg] = mapBToWF(gl.footPosDes[leg])(rbd::X);
+                    //initial_feet_y[leg] = mapBToWF(gl.footPosDes[leg])(rbd::Y);
+
+                    //actual values (in the wf!!!!!)
+                    initial_feet_x[leg] = mapBToWF(gl.footPos[leg])(rbd::X);
+                    initial_feet_y[leg] = mapBToWF(gl.footPos[leg])(rbd::Y);
                 }
-                actual_state_x = Vector3d ( des_com_pos.x(rbd::X),  des_com_pos.xd(rbd::X), 0.0);
-                actual_state_y = Vector3d ( des_com_pos.x(rbd::Y), des_com_pos.xd(rbd::Y), 0.0);
+                //init com
+
+                //desired values
+                //actual_state_x = Vector3d ( des_com_pos.x(rbd::X),  des_com_pos.xd(rbd::X), 0.0);
+                //actual_state_y = Vector3d ( des_com_pos.x(rbd::Y), des_com_pos.xd(rbd::Y), 0.0);
+
+
 
                 //use the actual state
-                //            actual_state_x = Vector3d ( gl.actual_CoM.x(rbd::X),  gl.actual_CoM.xd(rbd::X), 0.0);
-                //            actual_state_y = Vector3d ( gl.actual_CoM.x(rbd::Y),  gl.actual_CoM.xd(rbd::Y), 0.0);
-
-
+                actual_state_x = Vector3d ( gl.actual_CoM.x(rbd::X),  gl.actual_CoM.xd(rbd::X), 0.0);
+                actual_state_y = Vector3d ( gl.actual_CoM.x(rbd::Y),  gl.actual_CoM.xd(rbd::Y), 0.0);
 
                 mySchedule->next();
             } else {
@@ -293,6 +305,13 @@ void CrawlPlanner::run(double time,
 
             myPlanner->printSwing(mySchedule->getCurrentSwing());
 
+            LegDataMap<Vector2d> hip_offsets;
+            hip_offsets[LF] << 0.32, 0.23; hip_offsets[LF] = gl.R.block(0,0,2,2)*hip_offsets[LF];
+            hip_offsets[RF] << 0.32, -0.23;hip_offsets[RF] = gl.R.block(0,0,2,2)*hip_offsets[RF];
+            hip_offsets[LH] << 0.32, 0.23;hip_offsets[LH] = gl.R.block(0,0,2,2)*hip_offsets[LH];
+            hip_offsets[RH] << -0.32, -0.23;hip_offsets[RH] = gl.R.block(0,0,2,2)*hip_offsets[RH];
+            myPlanner->setHipOffsets(hip_offsets);
+
             //recompute the new steps from the actual step
             myPlanner->computeSteps(userSpeed,
                                     initial_feet_x,
@@ -302,6 +321,7 @@ void CrawlPlanner::run(double time,
                                     feetStates, footHolds,
                                     A, b, *myPlanner,
                                     mySchedule->getCurrentSwing());
+                                   // Vector2d(actual_state_x(0), actual_state_y(0)));
 
 
             print_foot_holds();
@@ -385,10 +405,10 @@ void CrawlPlanner::run(double time,
                     }
                  }
             }
-            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
-                                 0.1,
-                                 dwl::Color(dwl::ColorType::Green,1.),
-                                 "world");
+//            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
+//                                 0.1,
+//                                 dwl::Color(dwl::ColorType::Green,1.),
+//                                 "world");
         }
         sample++;
         //////////////////////////
@@ -418,20 +438,20 @@ void CrawlPlanner::run(double time,
         for (int i=0; i<des_com_x.size(); i++)
         {
             //decimate a bit to avoid overload
-            if ((i % 10) == 0)
-            {
-                display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
-                                     0.05,
-                                     dwl::Color(dwl::ColorType::Black, 1.),
-                                     "world");
-            }
+//            if ((i % 10) == 0)
+//            {
+//                display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
+//                                     0.05,
+//                                     dwl::Color(dwl::ColorType::Black, 1.),
+//                                     "world");
+//            }
         }
 
         //plot com / zmp trajectory on ground plane
         for (int i=0; i<zmp_x.size(); i++)
         {
             //decimate a bit to avoid overload
-            if ((i % 10) == 0)
+            if ((i % 5) == 0)
             {
                 display_->drawSphere(Vector3d(zmp_x(i),zmp_y(i),0.0),
                                      0.05,
@@ -446,7 +466,7 @@ void CrawlPlanner::run(double time,
 
 
 
-    //map com motion into feet motion
+    //map com motion into feet motion (assumes that iscomasbodypoint is set in task globals so com motion is directly mapped onto feet motion)
     gl.bodySpliner->updateFeetPoint(des_com_pos.xd, gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
 
     //map feet motion into joint motion
@@ -523,6 +543,10 @@ void CrawlPlanner::run(double time,
 
 
 
+Vector3d CrawlPlanner::mapBToWF(Vector3d B_vec_in)
+{
+    return gl.Rt*B_vec_in  + gl.actual_base.x;
+}
 
 void CrawlPlanner::debug()
 {

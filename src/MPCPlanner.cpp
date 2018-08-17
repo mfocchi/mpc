@@ -822,14 +822,15 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     prt(initialCoM(rbd::Y))
 
     LegDataMap<bool> comCorrectionFlag = false;
-    LegDataMap<double> comCorrectionValue = 0.0;
+    LegDataMap<Vector2d> comCorrectionValue(Vector2d::Zero());
+
     if (!initialCoM.isZero(0))
     {
         comCorrectionFlag = true;
-        comCorrectionValue[LF] = initialCoM(rbd::Y) +1.0 - feetValuesY[LF];
-        comCorrectionValue[RF] = initialCoM(rbd::Y) -1.0 - feetValuesY[RF];
-        comCorrectionValue[LH] = initialCoM(rbd::Y) +1.0 - feetValuesY[LH];
-        comCorrectionValue[RH] = initialCoM(rbd::Y) -1.0 - feetValuesY[RH];
+        comCorrectionValue[LF] = initialCoM +hip_offsets[LF] + userSpeed  - Vector2d(feetValuesX[LF] ,feetValuesY[LF]);
+        comCorrectionValue[RF] = initialCoM +hip_offsets[RF] + userSpeed  - Vector2d(feetValuesX[RF] ,feetValuesY[RF]);
+        comCorrectionValue[LH] = initialCoM +hip_offsets[LH] + userSpeed  - Vector2d(feetValuesX[LH] ,feetValuesY[LH]);
+        comCorrectionValue[RH] = initialCoM + hip_offsets[RH] + userSpeed  -Vector2d(feetValuesX[RH] ,feetValuesY[RH]);
 
         prt(feetValuesY)
     }
@@ -857,17 +858,20 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
 
         //3 stance/////////////////////////////////////
         //step
+        Vector2d deltaStep;
         if (comCorrectionFlag[schedule.getCurrentSwing()])
         {
 
             //std::cout<< "correxcting com: " <<comCorrectionValue[schedule.getCurrentSwing()]<<std::endl;
-            feetValuesY[schedule.getCurrentSwing()]+= comCorrectionValue[schedule.getCurrentSwing()];
+            deltaStep = comCorrectionValue[schedule.getCurrentSwing()];
             comCorrectionFlag[schedule.getCurrentSwing()] = false;
+        } else {
+            //default stepping
+            deltaStep = userSpeed;
         }
-        //default stepping
-        feetValuesX[schedule.getCurrentSwing()]+=  userSpeed(0); //TODO consider swing duration
-        feetValuesY[schedule.getCurrentSwing()]+=  userSpeed(1);
 
+        feetValuesX[schedule.getCurrentSwing()]+=  deltaStep(0); //TODO consider swing duration
+        feetValuesY[schedule.getCurrentSwing()]+=  deltaStep(1);
 
         //set swing for that leg
         feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
@@ -927,4 +931,9 @@ void MPCPlanner::printSwing(LegID swing)
     default:
         break;
    }
+}
+
+void MPCPlanner::setHipOffsets(iit::dog::LegDataMap<Eigen::Vector2d> hip_offsets)
+{
+    this->hip_offsets = hip_offsets;
 }
