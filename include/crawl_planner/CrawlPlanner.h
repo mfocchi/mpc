@@ -133,6 +133,7 @@ protected:
     void plotZMPtraj();
 
 
+    void interactiveChangeParams(void);
 
        //init params for MPC
     double horizon_duration = 2.0;

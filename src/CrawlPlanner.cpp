@@ -42,6 +42,12 @@ bool CrawlPlanner::init()
     addConsoleFunction("debug",
                        "debug",
                        &CrawlPlanner::debug, this);
+
+    addConsoleFunction("ictp",
+                       "ictp",
+                       &CrawlPlanner::interactiveChangeParams, this);
+
+
     //init crawl state machine
     state_machine = idle;
 
@@ -927,6 +933,67 @@ LegBoolMap  CrawlPlanner::detectLiftOff(iit::dog::LegDataMap<MPCPlanner::footSta
             swingTrigger[leg] = true;
     }
     return swingTrigger;
+}
+
+void CrawlPlanner::interactiveChangeParams(void)
+{
+    std::cout << "Poor man's ICTP " << std::endl;
+    std::cout << "8/2 to +/- linearSpeed X " << std::endl;
+    std::cout << "1/3 to +/- linearSpeed Y " << std::endl;
+    std::cout << "4/6 to +/- headingSpeed  " << std::endl;
+    std::cout << "o/l increase/decrease stepping frequency (needs toggleUseUserFreq) " << std::endl;
+    std::cout << "q to exit" << std::endl;
+
+    /* use system call to make terminal send all keystrokes directly to stdin */
+    int temp;
+    temp = system ("/bin/stty raw");
+
+    int c;
+    while(1)
+    {
+        c=getchar();
+        std::string user_text(1, c);
+        if(user_text == "4"){
+                headingSpeed+=0.005;
+                if (headingSpeed>1)
+                    headingSpeed = 1;
+
+                std::cout<<" :"<<headingSpeed<<std::endl<<std::endl;
+        }else if (user_text == "6"){
+                headingSpeed-=0.005;
+                if (headingSpeed<-1)
+                    headingSpeed = -1;
+
+                std::cout<<headingSpeed<<std::endl<<std::endl;
+        }else if (user_text == "1"){
+            linearSpeedY+=0.005;
+            if (linearSpeedY>0.4)
+                linearSpeedY = 0.4;
+
+            std::cout<<" :"<<linearSpeedY<<std::endl<<std::endl;
+
+        }else if (user_text == "3"){
+            linearSpeedY-=0.005;
+            if (linearSpeedY<-0.4)
+                linearSpeedY = -0.4;
+            std::cout<<" :"<<linearSpeedY<<std::endl<<std::endl;
+        }else if (user_text == "8"){
+            linearSpeedX+=0.005;
+            if (linearSpeedX>0.5)
+                linearSpeedX = 0.5;
+            std::cout<<" linearSpeedX:"<<linearSpeedX<<std::endl<<std::endl;
+        }else if (user_text == "2"){
+            linearSpeedX-=0.005;
+            if (linearSpeedX<-0.5)
+                linearSpeedX = -0.5;
+            std::cout<<" linearSpeedX:"<< linearSpeedX<<std::endl<<std::endl;
+        }else if(user_text == "q"){
+            break;
+        }else if(user_text == "Q"){
+            break;
+        }
+    }
+    temp  = 	system ("/bin/stty cooked");
 }
 
 }//namespace
