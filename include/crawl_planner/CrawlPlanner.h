@@ -22,7 +22,6 @@
 #include <dls_planner/Planner.h>
 #include <dls_planner/PlannerBase.h>
 #include <pluginlib/class_list_macros.h>
-
 #include <iit/locomotionutils/TrunkController.h>
 
 //crawl
@@ -137,20 +136,26 @@ protected:
        //init params for MPC
     double horizon_duration = 4.0;
     int horizon_size = 0.0;//10 default for tests
-    int number_of_steps = 8;
+    int number_of_steps = 4;
     int replanningWindow = 0.0;
     int replanning_steps = 1;
     int sample = 0, sampleW = 0, replanningStage = 0;
     bool firstTime = true;
 
     double lateral_bound = 0.2;
-    double time_resolution = 0.1;
+    double time_resolution = 0.04;
+    double task_time_resolution;
     double weight_R = 1e-06;
     double weight_Q = 1;
 
     Eigen::VectorXd  jerk_x, jerk_y;
     Eigen::VectorXd  des_com_x, des_com_y;
     Eigen::VectorXd  des_com_xd, des_com_yd;
+    iit::commons::LinearSpliner interpolateCoMPositionX;
+    iit::commons::LinearSpliner interpolateCoMPositionY;
+    iit::commons::LinearSpliner interpolateCoMVelocityX;
+    iit::commons::LinearSpliner interpolateCoMVelocityY;
+
     Eigen::Vector3d  actual_state_x = Vector3d(0.0, 0.0,0.0);
     Eigen::Vector3d  actual_state_y = Vector3d(0.0,-0.0,0.0);
     Eigen::VectorXd zmp_x, zmp_y, com_x, com_y, viol, com_xd, com_yd;

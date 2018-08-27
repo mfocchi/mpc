@@ -67,7 +67,7 @@ bool CrawlPlanner::init()
 void CrawlPlanner::starting(double time) {
     std::cout << "Starting CrawlPlanner controller at " << time << " sec.";
     std::cout << std::endl;
-     taskServoTime = time;
+    taskServoTime = time;
 
     //crawl init
     printf("chimney plan starting\n");
@@ -142,11 +142,12 @@ void CrawlPlanner::starting(double time) {
     gl.stance_legs = true;
 
     //replanning
-    time_resolution = 1.0/planning_rate_; //TODO change if replanning less frequently,
+    task_time_resolution = 1.0/planning_rate_; //TODO change if replanning less frequently,
+
     horizon_size = horizon_duration / time_resolution;
     myPlanner.reset(new MPCPlanner(horizon_size,    time_resolution,   rbd::g));
     std::cout<<"horizon_duration is :"<<horizon_duration<< std::endl;
-    std::cout<<"time_resolution is :"<<time_resolution<< std::endl;
+    std::cout<<"time_resolution is (should be a multiple of task_planning_rate):"<<time_resolution<< std::endl;
     std::cout<<"horizon size is :"<<horizon_size<< std::endl;
     std::cout<<"number of steps is :"<<number_of_steps<< std::endl;
 
@@ -188,13 +189,12 @@ void CrawlPlanner::starting(double time) {
         footHolds[leg].resize(2*number_of_steps);
     }
 
-
     printf("Crawl planner: finished starting\n");
 }
 
 
 void CrawlPlanner::run(double time,
-        double period) {
+                       double period) {
     taskServoTime = time;
 
     for (unsigned int i = 0; i < fbs_->getJointDoF(); i++) {
@@ -246,20 +246,22 @@ void CrawlPlanner::run(double time,
     /////////replanning
     if (replanningFlag)
     {
-        double sampleTime = sample*time_resolution;
+        double sampleTime = sample*task_time_resolution;
         Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
 
-//        if (check_touch_down())
-//            prt("touchdown")
+        //        if (check_touch_down())
+        //            prt("touchdown")
 
         //old fixed window
-//        if ((sample % replanningWindow) == 0)
-//        {
+        //        if ((sample % replanningWindow) == 0)
+        //        {
+
+        //this is the optimization
         if (firstTime ||
-           (touchDown[LF] == replanning_steps) ||
-           (touchDown[RF] == replanning_steps) ||
-           (touchDown[LH] == replanning_steps) ||
-           (touchDown[RH] == replanning_steps) )
+                (touchDown[LF] == replanning_steps) ||
+                (touchDown[RF] == replanning_steps) ||
+                (touchDown[LH] == replanning_steps) ||
+                (touchDown[RH] == replanning_steps) )
         {
 
             //do the replan
@@ -268,8 +270,8 @@ void CrawlPlanner::run(double time,
             prt(replanningStage)
 
 
-            //set initial state for optimization to actual state (there might have been disturbances)
-            if (!firstTime)
+                    //set initial state for optimization to actual state (there might have been disturbances)
+                    if (!firstTime)
             {
                 //init feet
                 for (int leg = 0; leg<4;leg++)
@@ -324,7 +326,7 @@ void CrawlPlanner::run(double time,
                                     feetStates, footHolds,
                                     A, b, *myPlanner,
                                     mySchedule->getCurrentSwing());
-                                   // Vector2d(actual_state_x(0), actual_state_y(0)));
+            // Vector2d(actual_state_x(0), actual_state_y(0)));
 
 
             print_foot_holds();
@@ -353,78 +355,94 @@ void CrawlPlanner::run(double time,
             sampleW = 0;
             std::cout<<"start stance"<<std::endl;
 
+        }//end of the optimization
 
-        } else {
-            sampleW++;
+        //old
+        //            des_com_pos.x(rbd::X) = des_com_x(sampleW);
+        //            des_com_pos.x(rbd::Y) = des_com_y(sampleW);
+        //            des_com_pos.xd(rbd::X) = des_com_xd(sampleW);
+        //            des_com_pos.xd(rbd::Y) = des_com_yd(sampleW);
 
-            des_com_pos.x(rbd::X) = des_com_x(sampleW);
-            des_com_pos.x(rbd::Y) = des_com_y(sampleW);
-            des_com_pos.xd(rbd::X) = des_com_xd(sampleW);
-            des_com_pos.xd(rbd::Y) = des_com_yd(sampleW);
+        //interpolate stuff cause time resolution of the traj is different than taskservo time
+        LegBoolMap liftOffFlag;
+        int n = static_cast<int>(sampleTime/time_resolution);
+        double rem = sampleTime - n*time_resolution;
+        if (rem == 0.0)//update interpolators when the samples are changing
+        {
+            //std::cout<<"update interpolators, sampleTime = "<<sampleTime<<std::endl;
+            interpolateCoMPositionX.setBoundary(sampleTime,time_resolution,des_com_x(sampleW), des_com_x(sampleW+1));
+            interpolateCoMPositionY.setBoundary(sampleTime,time_resolution,des_com_y(sampleW), des_com_y(sampleW+1));
+            interpolateCoMVelocityX.setBoundary(sampleTime,time_resolution,des_com_xd(sampleW), des_com_xd(sampleW+1));
+            interpolateCoMVelocityY.setBoundary(sampleTime,time_resolution,des_com_yd(sampleW), des_com_yd(sampleW+1));
+             //whenever a liftoff is expected set the swing params
+            liftOffFlag = detectLiftOff(feetStates, sampleW);
+            sampleW++; //the update happens each time_resolution samples, at a lower frequency
+        }
 
-            //whenever a liftoff is expected set the swing params
-            LegBoolMap liftOffFlag = detectLiftOff(feetStates, sampleW);
+        interpolateCoMPositionX.getPoint(sampleTime, des_com_pos.x(rbd::X));
+        interpolateCoMPositionY.getPoint(sampleTime, des_com_pos.x(rbd::Y));
+        interpolateCoMVelocityX.getPoint(sampleTime, des_com_pos.xd(rbd::X));
+        interpolateCoMVelocityY.getPoint(sampleTime, des_com_pos.xd(rbd::Y));
 
-            for (int leg = LF ; leg <=RH; leg++)
+        for (int leg = LF ; leg <=RH; leg++)
+        {
+            if (liftOffFlag[leg])
             {
-                if (liftOffFlag[leg])
-                {
 
-                    //footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
-                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
-
-                    gl.stance_legs[leg] = false;
-                    std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
-                }
+                //footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
+                footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
+                gl.stance_legs[leg] = false;
+                std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
             }
+        }
 
-           //creates the swing with only desired values
-           // set des feet
-//            for (int leg = LF ; leg <=RH; leg++)
-//            {
-//                if (!feetStates[leg].swing(sampleW))
-//                {
-//                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
-//                } else {
-//                    //work out the new swing foot
-//                    gl.footPosDes[leg].segment(rbd::X, 2) = Vector2d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW)) - Vector2d(des_com_x(sampleW), des_com_y(sampleW)) + (gl.Rt*gl.offCoM).segment(rbd::X,2);
-//                    gl.stance_legs[leg] = false;
-//                }
-//            }
+        //creates the swing with only desired values
+        // set des feet
+        //            for (int leg = LF ; leg <=RH; leg++)
+        //            {
+        //                if (!feetStates[leg].swing(sampleW))
+        //                {
+        //                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
+        //                } else {
+        //                    //work out the new swing foot
+        //                    gl.footPosDes[leg].segment(rbd::X, 2) = Vector2d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW)) - Vector2d(des_com_x(sampleW), des_com_y(sampleW)) + (gl.Rt*gl.offCoM).segment(rbd::X,2);
+        //                    gl.stance_legs[leg] = false;
+        //                }
+        //            }
 
-            //creates the swing with the footspliner
-            for (int leg = LF ; leg <=RH; leg++)
+        //creates the swing with the footspliner
+        for (int leg = LF ; leg <=RH; leg++)
+        {
+            if (!gl.stance_legs[leg])
             {
-                if (!gl.stance_legs[leg])
-                {
-                    //for the swing set  the trajectory
-                    footSpliner[leg].getPoint(sampleTime, gl.swingFootRef[leg]);
-                    gl.footPosDes[leg] = gl.swingFootRef[leg].x;
-                    gl.footVelDes[leg] = gl.swingFootRef[leg].xd;
+                //for the swing set  the trajectory
+                footSpliner[leg].getPoint(sampleTime, gl.swingFootRef[leg]);
+                gl.footPosDes[leg] = gl.swingFootRef[leg].x;
+                gl.footVelDes[leg] = gl.swingFootRef[leg].xd;
 
-                    bool stop_condition = false;
-                    //detect touchdown
-                    if (hapticCrawl) //haptically
+                bool stop_condition = false;
+                //detect touchdown
+                if (hapticCrawl) //haptically
+                {
+                    if (footSpliner[leg].isSwingingDown())
                     {
-                        if (footSpliner[leg].isSwingingDown())
-                        {
-                            stop_condition = (gl.vec_incl[leg].dot(gl.R.transpose()*gl.grForces[leg])>=force_th);
-                        }
-                    } else { //programmatically
-                        if (!feetStates[leg].swing(sampleW))
-                            stop_condition = true;
+                        stop_condition = (gl.vec_incl[leg].dot(gl.R.transpose()*gl.grForces[leg])>=force_th);
                     }
-                    if (stop_condition){
-                        gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
-                        touchDown[mySchedule->getCurrentSwing()]++;
-                        std::cout<<touchDown[mySchedule->getCurrentSwing()] <<" touchdown of  "<<legmap[leg]<<" leg"<<std::endl;
-                    }
+                } else { //programmatically
+                    if (!feetStates[leg].swing(sampleW))
+                        stop_condition = true;
+                }
+                if (stop_condition){
+                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
+                    touchDown[mySchedule->getCurrentSwing()]++;
+                    std::cout<<touchDown[mySchedule->getCurrentSwing()] <<" touchdown of  "<<legmap[leg]<<" leg"<<std::endl;
                 }
             }
-//            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
-//                                 0.1,
-//                                 dwl::Color(dwl::ColorType::Green,1.),
-//                                 "world");
+
+            //            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
+            //                                 0.1,
+            //                                 dwl::Color(dwl::ColorType::Green,1.),
+            //                                 "world");
         }
         sample++;
         //////////////////////////
@@ -454,20 +472,20 @@ void CrawlPlanner::run(double time,
         for (int i=0; i<des_com_x.size(); i++)
         {
             //decimate a bit to avoid overload
-//            if ((i % 10) == 0)
-//            {
-//                display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
-//                                     0.05,
-//                                     dwl::Color(dwl::ColorType::Black, 1.),
-//                                     "world");
-//            }
+            //            if ((i % 10) == 0)
+            //            {
+            //                display_->drawSphere(Vector3d(des_com_x(i),des_com_y(i),0.0),
+            //                                     0.05,
+            //                                     dwl::Color(dwl::ColorType::Black, 1.),
+            //                                     "world");
+            //            }
         }
 
         //plot com / zmp trajectory on ground plane
         for (int i=0; i<zmp_x.size(); i++)
         {
             //decimate a bit to avoid overload
-            if ((i % 5) == 0)
+            if ((i % 1) == 0)
             {
                 display_->drawSphere(Vector3d(zmp_x(i),zmp_y(i),0.0),
                                      0.05,
@@ -475,9 +493,6 @@ void CrawlPlanner::run(double time,
                                      "world");
             }
         }
-
-
-
     }
 
 
@@ -520,8 +535,8 @@ void CrawlPlanner::run(double time,
     rbd::Vector6D desComTwist; desComTwist <<  gl.des_base_orient.xd , des_com_pos.xd;
     rbd::Vector6D desBaseTwist;
     desBaseTwist =  dog::motionVectorTransform(Rdes.transpose()*gl.offCoM, Matrix3d::Identity())  *
-                        (desComTwist - dog::motionVectorTransform(Eigen::Vector3d(0,0,0), Rdes.transpose())*
-                        dog::getWholeBodyCOMJacobian(q_, *gl.linksInertia, *gl.homogeneousTransforms)*qd_ );
+            (desComTwist - dog::motionVectorTransform(Eigen::Vector3d(0,0,0), Rdes.transpose())*
+             dog::getWholeBodyCOMJacobian(q_, *gl.linksInertia, *gl.homogeneousTransforms)*qd_ );
     gl.des_target_pos.xd = rbd::linearPart(desBaseTwist);
 
     planned_ws_.setBasePosition(gl.des_target_pos.x);
@@ -578,7 +593,7 @@ void CrawlPlanner::debug()
                             feetStates, footHolds,
                             A, b, *myPlanner,
                             mySchedule->getCurrentSwing());
-                            //,Vector2d(gl.actual_CoM.x(rbd::X), gl.actual_CoM.x(rbd::Y)));
+    //,Vector2d(gl.actual_CoM.x(rbd::X), gl.actual_CoM.x(rbd::Y)));
 
     print_foot_holds();
     myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,
@@ -605,13 +620,13 @@ void CrawlPlanner::print_foot_holds()
 
         }
 
-//        std::cout<<std::endl;
-//        std::cout<<legmap[leg]<<" Y : ";
-//        for (int i=0; i<footHolds[leg].y.size(); i++)
-//        {
-//            if ((i % 2) == 0)
-//                std::cout<<footHolds[leg].y[i]<<"     ";
-//        }
+        //        std::cout<<std::endl;
+        //        std::cout<<legmap[leg]<<" Y : ";
+        //        for (int i=0; i<footHolds[leg].y.size(); i++)
+        //        {
+        //            if ((i % 2) == 0)
+        //                std::cout<<footHolds[leg].y[i]<<"     ";
+        //        }
     }
     std::cout<<std::endl;
 }
@@ -980,8 +995,7 @@ void CrawlPlanner::interactiveChangeParams(void)
 {
     std::cout << "Poor man's ICTP " << std::endl;
     std::cout << "8/2 to +/- linearSpeed X " << std::endl;
-    std::cout << "1/3 to +/- linearSpeed Y " << std::endl;
-    std::cout << "4/6 to +/- headingSpeed  " << std::endl;
+    std::cout << "4/6 to +/- linearSpeed Y " << std::endl;
     std::cout << "o/l increase/decrease stepping frequency (needs toggleUseUserFreq) " << std::endl;
     std::cout << "q to exit" << std::endl;
 
@@ -994,26 +1008,14 @@ void CrawlPlanner::interactiveChangeParams(void)
     {
         c=getchar();
         std::string user_text(1, c);
-        if(user_text == "4"){
-                headingSpeed+=0.005;
-                if (headingSpeed>1)
-                    headingSpeed = 1;
-
-                std::cout<<" :"<<headingSpeed<<std::endl<<std::endl;
-        }else if (user_text == "6"){
-                headingSpeed-=0.005;
-                if (headingSpeed<-1)
-                    headingSpeed = -1;
-
-                std::cout<<headingSpeed<<std::endl<<std::endl;
-        }else if (user_text == "1"){
+        if (user_text == "4"){
             linearSpeedY+=0.005;
             if (linearSpeedY>0.4)
                 linearSpeedY = 0.4;
 
             std::cout<<" :"<<linearSpeedY<<std::endl<<std::endl;
 
-        }else if (user_text == "3"){
+        }else if (user_text == "6"){
             linearSpeedY-=0.005;
             if (linearSpeedY<-0.4)
                 linearSpeedY = -0.4;
