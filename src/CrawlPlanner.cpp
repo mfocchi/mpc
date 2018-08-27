@@ -370,14 +370,16 @@ void CrawlPlanner::run(double time,
                 if (liftOffFlag[leg])
                 {
 
-                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
+                    //footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
+                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
+
                     gl.stance_legs[leg] = false;
                     std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
                 }
             }
 
-
-           // set des feet            //only desired values
+           //creates the swing with only desired values
+           // set des feet
 //            for (int leg = LF ; leg <=RH; leg++)
 //            {
 //                if (!feetStates[leg].swing(sampleW))
@@ -390,6 +392,7 @@ void CrawlPlanner::run(double time,
 //                }
 //            }
 
+            //creates the swing with the footspliner
             for (int leg = LF ; leg <=RH; leg++)
             {
                 if (!gl.stance_legs[leg])
@@ -399,14 +402,24 @@ void CrawlPlanner::run(double time,
                     gl.footPosDes[leg] = gl.swingFootRef[leg].x;
                     gl.footVelDes[leg] = gl.swingFootRef[leg].xd;
 
-                    //detect touchdown programmatically
-                    if (!feetStates[leg].swing(sampleW))
+                    bool stop_condition = false;
+                    //detect touchdown
+                    if (hapticCrawl) //haptically
                     {
+                        if (footSpliner[leg].isSwingingDown())
+                        {
+                            stop_condition = (gl.vec_incl[leg].dot(gl.R.transpose()*gl.grForces[leg])>=force_th);
+                        }
+                    } else { //programmatically
+                        if (!feetStates[leg].swing(sampleW))
+                            stop_condition = true;
+                    }
+                    if (stop_condition){
                         gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
                         touchDown[mySchedule->getCurrentSwing()]++;
                         std::cout<<touchDown[mySchedule->getCurrentSwing()] <<" touchdown of  "<<legmap[leg]<<" leg"<<std::endl;
                     }
-                 }
+                }
             }
 //            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
 //                                 0.1,
