@@ -495,7 +495,11 @@ void CrawlPlanner::run(double time,
         }
     }
 
-
+    dwl::ArrowProperties arrow(0.02, 0.05, 0.0);
+    display_->drawArrow(Vector3d(.5,0,0),
+                        Vector3d(.5,0,0) +   Vector3d(linearSpeedX,linearSpeedY,0)  * 2,
+                        arrow, dwl::Color(dwl::ColorType::Red, 1.),
+                        "base_link");
 
     //map com motion into feet motion (assumes that iscomasbodypoint is set in task globals so com motion is directly mapped onto feet motion)
     gl.bodySpliner->updateFeetPoint(des_com_pos.xd, gl.des_base_orient.x, gl.des_base_orient.xd, planning_rate_,gl.stance_legs, gl.offCoM,gl.footPosDes,gl.footVelDes);
