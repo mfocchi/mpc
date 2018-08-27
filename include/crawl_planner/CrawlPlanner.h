@@ -139,6 +139,7 @@ protected:
     int horizon_size = 0.0;//10 default for tests
     int number_of_steps = 8;
     int replanningWindow = 0.0;
+    int replanning_steps = 1;
     int sample = 0, sampleW = 0, replanningStage = 0;
     bool firstTime = true;
 
@@ -161,7 +162,7 @@ protected:
     int replanningFlag = false;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
-    bool touchDown = false;
+    iit::dog::LegDataMap<int> touchDown = 0;
 
     double disturbance = 0.0;
     std::shared_ptr<MPCPlanner> myPlanner;

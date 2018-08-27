@@ -255,9 +255,12 @@ void CrawlPlanner::run(double time,
         //old fixed window
 //        if ((sample % replanningWindow) == 0)
 //        {
-        if (firstTime || touchDown)
+        if (firstTime ||
+           (touchDown[LF] == replanning_steps) ||
+           (touchDown[RF] == replanning_steps) ||
+           (touchDown[LH] == replanning_steps) ||
+           (touchDown[RH] == replanning_steps) )
         {
-
 
             //do the replan
             replanningStage++;
@@ -293,7 +296,7 @@ void CrawlPlanner::run(double time,
                 //use the actual state
                 actual_state_x = Vector3d ( gl.actual_CoM.x(rbd::X),  gl.actual_CoM.xd(rbd::X), 0.0);
                 actual_state_y = Vector3d ( gl.actual_CoM.x(rbd::Y),  gl.actual_CoM.xd(rbd::Y), 0.0);
-
+                touchDown[mySchedule->getCurrentSwing()] = 0; //reset touchdown
                 mySchedule->next();
             } else {
                 firstTime = false;
@@ -306,10 +309,10 @@ void CrawlPlanner::run(double time,
             myPlanner->printSwing(mySchedule->getCurrentSwing());
 
             LegDataMap<Vector2d> hip_offsets;
-            hip_offsets[LF] << 0.32, 0.23; hip_offsets[LF] = gl.R.block(0,0,2,2)*hip_offsets[LF];
-            hip_offsets[RF] << 0.32, -0.23;hip_offsets[RF] = gl.R.block(0,0,2,2)*hip_offsets[RF];
-            hip_offsets[LH] << 0.32, 0.23;hip_offsets[LH] = gl.R.block(0,0,2,2)*hip_offsets[LH];
-            hip_offsets[RH] << -0.32, -0.23;hip_offsets[RH] = gl.R.block(0,0,2,2)*hip_offsets[RH];
+            hip_offsets[LF] << 0.32, 0.23; hip_offsets[LF] = gl.Rt.block(0,0,2,2)*hip_offsets[LF]; //rotate to base frame
+            hip_offsets[RF] << 0.32, -0.23;hip_offsets[RF] = gl.Rt.block(0,0,2,2)*hip_offsets[RF];
+            hip_offsets[LH] << 0.32, 0.23;hip_offsets[LH] = gl.Rt.block(0,0,2,2)*hip_offsets[LH];
+            hip_offsets[RH] << -0.32, -0.23;hip_offsets[RH] = gl.Rt.block(0,0,2,2)*hip_offsets[RH];
             myPlanner->setHipOffsets(hip_offsets);
 
             //recompute the new steps from the actual step
@@ -349,7 +352,7 @@ void CrawlPlanner::run(double time,
             //reset the counter
             sampleW = 0;
             std::cout<<"start stance"<<std::endl;
-            touchDown = false; //reset touchdown
+
 
         } else {
             sampleW++;
@@ -400,8 +403,8 @@ void CrawlPlanner::run(double time,
                     if (!feetStates[leg].swing(sampleW))
                     {
                         gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
-                        touchDown = true;
-                        std::cout<<"touchdown  "<<legmap[leg]<<" leg"<<std::endl;
+                        touchDown[mySchedule->getCurrentSwing()]++;
+                        std::cout<<touchDown[mySchedule->getCurrentSwing()] <<" touchdown of  "<<legmap[leg]<<" leg"<<std::endl;
                     }
                  }
             }
@@ -908,7 +911,8 @@ void CrawlPlanner::start_crawl(void)
 
 void CrawlPlanner::start_replanning_crawl()
 {
- newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
+ newline::getInt("number_of_steps in the horizon:", number_of_steps, number_of_steps);
+ newline::getInt("replanning steps:", replanning_steps, replanning_steps);
  sample = 0;
  sampleW = 0;
  firstTime = true;
