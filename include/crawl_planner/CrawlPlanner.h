@@ -117,6 +117,8 @@ protected:
     /////////////////////////////
     //replanning stuff
     void debug();
+    void toggleCoMCorrection();
+    void toggleOptimizeVelocity();
     void start_replanning_crawl();
     void print_foot_holds();
     iit::dog::LegBoolMap detectLiftOff(iit::dog::LegDataMap<MPCPlanner::footState> feetStates, double actualSample);
@@ -131,12 +133,13 @@ protected:
                       Vector2d initialCoM = Vector2d::Zero());
     void plotZMPtraj();
     Vector3d mapBToWF(Vector3d B_vec_in);
+    Vector3d mapWFToB(Vector3d W_vec_in);
     void interactiveChangeParams(void);
 
        //init params for MPC
-    double horizon_duration = 4.0;
+    double horizon_duration = 8.0;
     int horizon_size = 0.0;//10 default for tests
-    int number_of_steps = 4;
+    int number_of_steps = 8;
     int replanningWindow = 0.0;
     int replanning_steps = 1;
     int sample = 0, sampleW = 0, replanningStage = 0;
@@ -165,6 +168,7 @@ protected:
     iit::dog::LegDataMap<double> initial_feet_y;
     Eigen::MatrixXd A; VectorXd b;
     int replanningFlag = false;
+    bool stoppingFlag = false;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
     iit::dog::LegDataMap<int> touchDown = 0;
@@ -172,7 +176,8 @@ protected:
     double disturbance = 0.0;
     std::shared_ptr<MPCPlanner> myPlanner;
 
-
+    iit::dog::LegDataMap<Eigen::Vector3d> dummy1;
+    iit::dog::LegDataMap<Eigen::Vector3d> dummy2;
 
     //replanning stuff
     /////////////////////////////

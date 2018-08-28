@@ -18,6 +18,8 @@
 #include <iit/commons/planning/planning.h> //this is for linecoeffd
 #include <iit/rbd/rbd.h>
 
+
+
 class MPCPlanner
 {
 
@@ -111,9 +113,36 @@ class MPCPlanner
 
         void setHipOffsets(iit::dog::LegDataMap<Eigen::Vector2d> hip_offsets);
 
+        iit::dog::LegDataMap<Eigen::Vector3d> getDummyVars(int number)
+        {
+            iit::dog::LegDataMap<Eigen::Vector3d> dummy3d;
+            switch(number)
+            {
+            case 1:{
+
+                dummy3d[iit::dog::LF] <<dummy1[iit::dog::LF],0.02;
+                dummy3d[iit::dog::RF] <<dummy1[iit::dog::RF],0.02;
+                dummy3d[iit::dog::LH] <<dummy1[iit::dog::LH],0.02;
+                dummy3d[iit::dog::RH] <<dummy1[iit::dog::RH],0.02;
+                }
+                break;
+            case 2:{
+                dummy3d[iit::dog::LF] <<dummy2[iit::dog::LF],0.0;
+                dummy3d[iit::dog::RF] <<dummy2[iit::dog::RF],0.0;
+                dummy3d[iit::dog::LH] <<dummy2[iit::dog::LH],0.0;
+                dummy3d[iit::dog::RH] <<dummy2[iit::dog::RH],0.0;
+                }
+                break;
+            default:
+                break;
+            }
+            return dummy3d;
+
+        }
+
     private:
 
-
+        bool debug_mode = false;
 
         double Ts;
         double D2;
@@ -131,8 +160,9 @@ class MPCPlanner
         Eigen::Matrix<double,1,3> Ca;
         Eigen::MatrixXd Zx, Zu, Xpx, Xpu, Xvx, Xvu, Xax, Xau;
         double gravity_,height_;
+        std::map<int, std::string> legmap;
+        iit::dog::LegDataMap<Eigen::Vector2d> hip_offsets,dummy1, dummy2;
 
-        iit::dog::LegDataMap<Eigen::Vector2d> hip_offsets;
 };
 
 

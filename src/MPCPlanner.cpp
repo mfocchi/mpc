@@ -56,7 +56,13 @@ MPCPlanner::MPCPlanner(const double horizon_size, const double Ts, const double 
 //    loadGains(filename);
 //
 //    initial_state_.resize();
+
+    legmap[iit::dog::LF] = "LF";
+    legmap[iit::dog::RF] = "RF";
+    legmap[iit::dog::LH] = "LH";
+    legmap[iit::dog::RH] = "RH";
 }
+
 
 MPCPlanner::~MPCPlanner()
 {
@@ -206,7 +212,7 @@ void MPCPlanner::computeCOMtrajectory( const Vector3d & initial_state, const Vec
 
 }
 
-
+//1 D - no constraints, tries to track a zmp ref
 void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_state,const  VectorXd & zmp_ref,  VectorXd & jerk_vector)
 {
     this->height_ = actual_height;
@@ -223,7 +229,7 @@ void MPCPlanner::solveQP(const double actual_height, const Vector3d & initial_st
 
 }
 
-//this enables to set only BOX constraints, no zmp reference so you need to set only R
+//1 D - this enables to set only BOX constraints, no zmp reference so you need to set only R
 void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
 {
     this->height_ = actual_height;
@@ -286,7 +292,7 @@ void MPCPlanner::solveQPconstraint(const double actual_height, const Vector3d & 
 
 }
 
-
+//1 D - box constraints tries to stay away from box constraints thanks to slacks (no zmp ref given)
 void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector3d & initial_state,const  BoxLimits & zmpLim,  VectorXd & jerk_vector)
 {
     this->height_ = actual_height;
@@ -405,7 +411,7 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     }
 }
 
-//using polygon constraints without velocity optimization
+//2 D - using polygon constraints without velocity optimization, set only R
 void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
                                           const Eigen::Vector3d & initial_state_x,
                                           const Eigen::Vector3d & initial_state_y,
@@ -471,7 +477,7 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 
 }
 
-//using polygon constraints with velocity optimization
+//2 D - using polygon constraints with velocity optimization, set R for jerk and Q for velocity
 void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
                                           const Eigen::Vector3d & initial_state_x,
                                           const Eigen::Vector3d & initial_state_y,
@@ -816,10 +822,11 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
         feetStates[leg].resize(horizon_size);
         //set always stances
         feetStates[leg].swing.setConstant(horizon_size,false);
-        footHolds[leg].resize(2*number_of_steps);
+        //footHolds[leg].resize(2*number_of_steps); old
+        footHolds[leg].resize(number_of_steps);
 
     }
-    prt(initialCoM(rbd::Y))
+    //prt(initialCoM.transpose())
 
     LegDataMap<bool> comCorrectionFlag = false;
     LegDataMap<Vector2d> comCorrectionValue(Vector2d::Zero());
@@ -827,13 +834,18 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     if (!initialCoM.isZero(0))
     {
         comCorrectionFlag = true;
-        comCorrectionValue[LF] = initialCoM +hip_offsets[LF] + userSpeed  - Vector2d(feetValuesX[LF] ,feetValuesY[LF]);
-        comCorrectionValue[RF] = initialCoM +hip_offsets[RF] + userSpeed  - Vector2d(feetValuesX[RF] ,feetValuesY[RF]);
-        comCorrectionValue[LH] = initialCoM +hip_offsets[LH] + userSpeed  - Vector2d(feetValuesX[LH] ,feetValuesY[LH]);
-        comCorrectionValue[RH] = initialCoM + hip_offsets[RH] + userSpeed  -Vector2d(feetValuesX[RH] ,feetValuesY[RH]);
-
-        prt(feetValuesY)
+        comCorrectionValue[LF] = initialCoM + hip_offsets[LF] + userSpeed  - Vector2d(feetValuesX[LF] ,feetValuesY[LF]);
+        comCorrectionValue[RF] = initialCoM + hip_offsets[RF] + userSpeed  - Vector2d(feetValuesX[RF] ,feetValuesY[RF]);
+        comCorrectionValue[LH] = initialCoM + hip_offsets[LH] + userSpeed  - Vector2d(feetValuesX[LH] ,feetValuesY[LH]);
+        comCorrectionValue[RH] = initialCoM + hip_offsets[RH] + userSpeed  - Vector2d(feetValuesX[RH] ,feetValuesY[RH]);       
     }
+
+
+    dummy1[LF] = initialCoM + hip_offsets[LF];
+    dummy1[RF] = initialCoM + hip_offsets[RF];
+    dummy1[LH] = initialCoM + hip_offsets[LH];
+    dummy1[RH] = initialCoM + hip_offsets[RH];
+
 
     //prt(phase_duration)
     for (int i=0; i<number_of_steps;i++)
@@ -847,11 +859,6 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
         feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
         feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
         feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
-        //save footholds
-        footHolds[LF].x(2*i) = feetValuesX[LF]; footHolds[LF].y(2*i) = feetValuesY[LF];
-        footHolds[RF].x(2*i) = feetValuesX[RF]; footHolds[RF].y(2*i) = feetValuesY[RF];
-        footHolds[LH].x(2*i) = feetValuesX[LH]; footHolds[LH].y(2*i) = feetValuesY[LH];
-        footHolds[RH].x(2*i) = feetValuesX[RH]; footHolds[RH].y(2*i) = feetValuesY[RH];
         //build inequalities with the set of stance feet and positions
         myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration, horizon_size, A,  b,  number_of_constraints );
         start_phase_index += phase_duration;
@@ -861,10 +868,15 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
         Vector2d deltaStep;
         if (comCorrectionFlag[schedule.getCurrentSwing()])
         {
-
-            //std::cout<< "correxcting com: " <<comCorrectionValue[schedule.getCurrentSwing()]<<std::endl;
+            if (debug_mode)
+            {
+                std::cout<< "correxcting com for leg : " <<legmap[schedule.getCurrentSwing()]
+                         <<"  X: "<<comCorrectionValue[schedule.getCurrentSwing()](rbd::X)
+                         <<"  Y: "<<comCorrectionValue[schedule.getCurrentSwing()](rbd::Y)<<std::endl;
+            }
             deltaStep = comCorrectionValue[schedule.getCurrentSwing()];
             comCorrectionFlag[schedule.getCurrentSwing()] = false;
+            dummy2[schedule.getCurrentSwing()] = comCorrectionValue[schedule.getCurrentSwing()];
         } else {
             //default stepping
             deltaStep = userSpeed;
@@ -872,6 +884,12 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
 
         feetValuesX[schedule.getCurrentSwing()]+=  deltaStep(0); //TODO consider swing duration
         feetValuesY[schedule.getCurrentSwing()]+=  deltaStep(1);
+
+        //save for debug
+        footHolds[LF].x(i) = feetValuesX[LF]; footHolds[LF].y(i) = feetValuesY[LF];
+        footHolds[RF].x(i) = feetValuesX[RF]; footHolds[RF].y(i) = feetValuesY[RF];
+        footHolds[LH].x(i) = feetValuesX[LH]; footHolds[LH].y(i) = feetValuesY[LH];
+        footHolds[RH].x(i) = feetValuesX[RH]; footHolds[RH].y(i) = feetValuesY[RH];
 
         //set swing for that leg
         feetStates[schedule.getCurrentSwing()].swing.segment(start_phase_index, phase_duration).setConstant(true);
@@ -883,11 +901,6 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
         feetStates[RF].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RF]);
         feetStates[LH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[LH]);
         feetStates[RH].y.segment(start_phase_index, phase_duration).setConstant(feetValuesY[RH]);
-        //save footholds
-        footHolds[LF].x(2*i + 1) = feetValuesX[LF]; footHolds[LF].y(2*i +1) = feetValuesY[LF];
-        footHolds[RF].x(2*i + 1) = feetValuesX[RF]; footHolds[RF].y(2*i +1) = feetValuesY[RF];
-        footHolds[LH].x(2*i + 1) = feetValuesX[LH]; footHolds[LH].y(2*i +1) = feetValuesY[LH];
-        footHolds[RH].x(2*i + 1) = feetValuesX[RH]; footHolds[RH].y(2*i +1) = feetValuesY[RH];
     //    //build inequalities with the set of stance feet and positions
         myPlanner.buildPolygonMatrix(feetStates, start_phase_index,phase_duration,horizon_size, A,  b,  number_of_constraints );
         start_phase_index += phase_duration;
