@@ -522,11 +522,13 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
     weightQv.resize(horizon_size_,horizon_size_);
     if (replanningWindow ==1000)
     {
-        prt("usig constant  weighting")
+        //this tries to achieve the desired speed at the end of the horizon
+        //prt("usig constant  weighting")
         weightQv.setIdentity();
         weightQv  *= weight_Q*horizon_size_/window;//scale the importance with window size to make trhe costs comparable
     } else{
-        prt("usig importance weighting")
+        //this tries to achieve the desired speed at the end of the replanning window
+        //prt("usig importance weighting")
         //importance weight, make gaussian wise most important the weights at the end of the replanning window
         weightQv = makeGaussian(horizon_size_, replanningWindow, replanningWindow).asDiagonal();
         weightQv  *= weight_Q*horizon_size_; //to use the same weights cause the gaussian  integral is 1 and not horizon_size (e.g. as it would be as we have all ones)
@@ -603,10 +605,12 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
         jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
     }
     //costs
-    std::cout<<"jerk cost Cj: "<<0.5*solution.transpose()*Gjerk*solution <<std::endl;
-    std::cout<<"acc cost Ca: "<<0.5*solution.transpose()*Ga*solution <<std::endl ;
-    std::cout<<"vel cost Cv: "<<0.5*solution.transpose()*Gv*solution + gv.transpose()*solution<<std::endl;
-
+    if (debug_mode)
+    {
+        std::cout<<"jerk cost Cj: "<<0.5*solution.transpose()*Gjerk*solution <<std::endl;
+        std::cout<<"acc cost Ca: "<<0.5*solution.transpose()*Ga*solution <<std::endl ;
+        std::cout<<"vel cost Cv: "<<0.5*solution.transpose()*Gv*solution + gv.transpose()*solution<<std::endl;
+    }
     //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
 
     all_violations_ =CI*solution + ci0;

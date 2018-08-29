@@ -113,6 +113,8 @@ void CrawlPlanner::starting(double time) {
     //crawl options
     force_th = gl.config_.get<double>("Crawl.force_th");
     hapticCrawl = gl.config_.get<bool>("Crawl.hapticCrawl");
+    if (!hapticCrawl)
+        std::cout<< "haptic crawl is not ON!" <<std::endl;
     Terrain_Estimation  = gl.config_.get<bool>("Crawl.terrain_estimation");
     stepHandler->useTerrainEstimation(Terrain_Estimation);
     gl.muEstimate = gl.config_.get<double>("Crawl.mu_estimate");
@@ -257,10 +259,6 @@ void CrawlPlanner::run(double time,
     {
         double sampleTime = sample*task_time_resolution;
         Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
-
-        //        if (check_touch_down())
-        //            prt("touchdown")
-
         //old fixed window
         //        if ((sample % replanningWindow) == 0)
         //        {
@@ -288,13 +286,17 @@ void CrawlPlanner::run(double time,
                     //desired values (in the wf!!!!!)  (just for debug)
                     //initial_feet_x[leg] = feetStates[leg].x(sampleW);
                     //initial_feet_y[leg] = feetStates[leg].y(sampleW);
-                    //footposdes
-                    //initial_feet_x[leg] = mapBToWF(gl.footPosDes[leg])(rbd::X);
-                    //initial_feet_y[leg] = mapBToWF(gl.footPosDes[leg])(rbd::Y);
 
-                    //actual values (in the wf!!!!!)
-                    initial_feet_x[leg] = mapBToWF(gl.footPos[leg])(rbd::X);
-                    initial_feet_y[leg] = mapBToWF(gl.footPos[leg])(rbd::Y);
+                    if (!hapticCrawl)
+                    {
+                        //footposdes
+                        initial_feet_x[leg] = mapBToWF(gl.footPosDes[leg])(rbd::X);
+                        initial_feet_y[leg] = mapBToWF(gl.footPosDes[leg])(rbd::Y);
+                    } else {
+                        //actual values (in the wf!!!!!)
+                        initial_feet_x[leg] = mapBToWF(gl.footPos[leg])(rbd::X);
+                        initial_feet_y[leg] = mapBToWF(gl.footPos[leg])(rbd::Y);
+                    }
                 }
                 //init com
 
@@ -415,9 +417,14 @@ void CrawlPlanner::run(double time,
             {
                 footTarget = mapWFToB(Vector3d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW), 0.0));
                 footTargetW = gl.actual_base.x + gl.Rt*footTarget;
-                //footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, linearSpeedX, linearSpeedY,  step_height);
                 Vector3d deltaFoot = footTarget - gl.footPos[leg];
-                footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, deltaFoot(rbd::X), deltaFoot(rbd::Y),  step_height);
+                if (!hapticCrawl)
+                {
+                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, deltaFoot(rbd::X), deltaFoot(rbd::Y),  step_height);
+
+                } else {
+                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, deltaFoot(rbd::X), deltaFoot(rbd::Y),  step_height);
+                }
                 gl.stance_legs[leg] = false;
                 std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
             }
