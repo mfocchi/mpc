@@ -16,13 +16,9 @@
 #include <math.h>
 
 //Includes
-#include <iit/rbd/utils.h>
-
-
 #include <dls_planner/Planner.h>
 #include <dls_planner/PlannerBase.h>
 #include <pluginlib/class_list_macros.h>
-#include <iit/locomotionutils/TrunkController.h>
 
 //crawl
 #include <terrain_estimator/CTerrainEstimator.h>
@@ -31,10 +27,8 @@
 #include <crawl_controller/StepHandler.h>
 #include <crawl_controller/BodyTargetHandler.h>
 
-
 //replanning
 #include <crawl_planner/MPCPlanner.h>
-#include <crawl_planner/SwingManager.h>
 
 namespace dls_planner
 {
@@ -79,13 +73,7 @@ public:
                                          std::shared_ptr<iit::dog::FeetContactForces> & feet_forces);
 protected:
 
-
-
     dwl::WholeBodyState planned_ws_;
-
-    /** @brief Number of joints */
-    unsigned int num_joints_;
-
 
     //Joint state
     dog::JointState des_tau_;
@@ -97,14 +85,9 @@ protected:
     dog::JointState qdd_;
     dog::JointState tau_;
 
-    dog::LegDataMap<rbd::Vector3d> jointDesPos;
-    dog::LegDataMap<rbd::Vector3d> jointDesVel;
-    dog::LegDataMap<rbd::Vector3d> jointDesAcc;
-
-    //crawl
+    //crawl functions
     bool update_base_position(double time);
     bool update_load_force(dog::LegID swing_leg_index, double time);
-    void update_leg_correction(dog::LegID swing_leg_index, double time);
     bool update_swing_position(dog::LegID swing_leg_index, double time);
     bool check_touch_down();
     void update_phase_duration(double cycle_time);
@@ -114,14 +97,14 @@ protected:
     void updateVarsForDataLogging();
     void computeTerrainEstimation();
 
-    /////////////////////////////
-    //replanning stuff
+    //replanning functions
     void debug();
     void toggleCoMCorrection();
     void toggleOptimizeVelocity();
     void start_replanning_crawl();
     void print_foot_holds();
     iit::dog::LegBoolMap detectLiftOff(iit::dog::LegDataMap<MPCPlanner::footState> feetStates, double actualSample);
+    //TODO to remove
     void computeSteps(const Vector2d & userSpeed,
                       const iit::dog::LegDataMap<double> & initial_feet_x, const iit::dog::LegDataMap<double> & initial_feet_y,
                       const int number_of_steps, const int horizon_size,
@@ -131,12 +114,11 @@ protected:
                       MPCPlanner & myPlanner,
                       dog::LegID swing_leg_index,
                       Vector2d initialCoM = Vector2d::Zero());
-    void plotZMPtraj();
     Vector3d mapBToWF(Vector3d B_vec_in);
     Vector3d mapWFToB(Vector3d W_vec_in);
     void interactiveChangeParams(void);
 
-       //init params for MPC
+    //init params for replanning stage
     double horizon_duration = 8.0;
     int horizon_size = 0.0;//10 default for tests
     int number_of_steps = 8;
@@ -144,8 +126,7 @@ protected:
     int replanning_steps = 1;
     int sample = 0, sampleW = 0, replanningStage = 0;
     bool firstTime = true;
-
-    double lateral_bound = 0.2;
+    //this is the time discretization of the trajectory
     double time_resolution = 0.04;
     double task_time_resolution;
     double weight_R = 1e-06;
@@ -167,41 +148,37 @@ protected:
     iit::dog::LegDataMap<double> initial_feet_x;
     iit::dog::LegDataMap<double> initial_feet_y;
     Eigen::MatrixXd A; VectorXd b;
+    iit::dog::LegDataMap<int> touchDown = 0;
+    double disturbance = 0.0;
+    std::shared_ptr<MPCPlanner> myPlanner;
+
+    //flags
     int replanningFlag = false;
     bool stoppingFlag = false;
     int optimizeVelocityFlag = true;
     int useComStepCorrection = true;
-    iit::dog::LegDataMap<int> touchDown = 0;
-
-    double disturbance = 0.0;
-    std::shared_ptr<MPCPlanner> myPlanner;
-
     iit::dog::LegDataMap<Eigen::Vector3d> dummy1;
     iit::dog::LegDataMap<Eigen::Vector3d> dummy2;
+    //end of replanning variables
 
-    //replanning stuff
-    /////////////////////////////
-
-
-    //void changeCrawlParams(); TODO
-    //void stop_crawl();
-
-    //objects
+    //common objects
     TaskGlobals gl;
     std::shared_ptr<StepHandler>  stepHandler;
     std::shared_ptr<BodyTargetHandler> bodyTargetHandler;
-    std::shared_ptr<SwingManager> swingManager;
     std::shared_ptr<BaseState > bs;
     CTerrainEstimator terrainEstimator;
 
+    //haptic planner com state
+    iit::planning::Point3d des_com_pos, des_com_posB;
 
     //Flags
     bool stopping_crawl = false;
     bool Terrain_Estimation;
     bool hapticCrawl = true;
     bool roughTerrainFlag = false;
-
     double taskServoTime;
+
+
     //crawl variables
     dog::LegID swing_leg_index;
     enum the_states {idle,
@@ -212,34 +189,27 @@ protected:
     };
     the_states state_machine;
     dog::LegDataMap<the_states> state_machine_leg;
-    the_states state_machineRF;
-    the_states state_machineLH;
-    the_states state_machineRH;
     Vector3d BaryTriangleW;
     double force_th = 0;
-    double linearSpeedX;     double linearSpeedX_dsp;
-    double linearSpeedY;     double linearSpeedY_dsp;
-    double headingSpeed;     double headingSpeed_dsp;
+    double linearSpeedX;
+    double linearSpeedY;
+    double headingSpeed;
     double linearSpeedXmax = 0.07;
     double headingSpeedmax = 0.07;
     double linearSpeedYmax = 0.07;
     double step_height_max = 0.2;
     double initial_height = 0.0;
-
     double step_height = 0.1;
     int step_count = 0; //count steps!
-    dog::LegDataMap<Eigen::Vector3d> sample_footPosDes;
     double step_x, step_y;
 
     //spliners
     iit::commons::FifthOrderPolySpliner forceLimSpliner;
-    commons::FifthOrderPolySpliner::Point force_start, force_end, force_intermediate;
-    dog::LegDataMap<iit::planning::Point3d> feet_intermediate;
+    commons::FifthOrderPolySpliner::Point  force_intermediate;
     dog::LegDataMap<dog::FootSpliner> footSpliner;
     Timer baseTimer, forceTimer, swingTimer;
     std::shared_ptr<FootScheduler>  mySchedule;
 
-    iit::planning::Point3d des_com_pos, des_com_posB;
     //timers
     double base_motion_duration;
     double swing_motion_duration;
