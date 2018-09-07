@@ -98,8 +98,8 @@ void CrawlPlanner::starting(double time) {
 
     //init generic stuff
     //set relationship bw velocity and step
-    stepHandler->setSpeedParameters(0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.022, 0.022, 0.022);
-    roughTerrainFlag = gl.config_.get<bool>("Crawl.roughTerrain");    step_height = gl.config_.get<double>("Crawl.step_height");
+    roughTerrainFlag = gl.config_.get<bool>("Crawl.roughTerrain");
+    step_height = gl.config_.get<double>("Crawl.step_height");
     linearSpeedX = gl.config_.get<double>("Crawl.linearSpeedX");
     linearSpeedY = gl.config_.get<double>("Crawl.linearSpeedY");
     headingSpeed = gl.config_.get<double>("Crawl.headingSpeed");
@@ -133,6 +133,7 @@ void CrawlPlanner::starting(double time) {
     stepHandler->useTerrainEstimation(Terrain_Estimation);
     gl.cycle_time = gl.config_.get<double>("Crawl.cycle_time");
     update_phase_duration(gl.cycle_time);
+    stepHandler->setSpeedParameters(0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.022, 0.022, 0.022);
     stepHandler->setHipDefaultYOffset(0.06 + fabs((gl.footPos[iit::dog::LF] - stepHandler->getHipPosition(q_,iit::dog::LF))(rbd::Y)));
     stepHandler->setDefaultStepLength((linearSpeedX * gl.cycle_time));
     des_q_ = q_;
@@ -168,7 +169,13 @@ void CrawlPlanner::starting(double time) {
     actual_state_y(1) = gl.actual_CoM.xd(rbd::Y);
     actual_state_y(2) = 0.0;
 
-    //this should be in the WF
+    //set position of hip offsets (in base frame)
+    hip_offsets[LF] << 0.33, 0.32;
+    hip_offsets[RF] << 0.33, -0.32;
+    hip_offsets[LH] << -0.33, 0.32;
+    hip_offsets[RH] << -0.33, -0.32;
+
+    //set initial position of the feet (in the world frame)
     initial_feet_x[LF] = (gl.actual_base.x + gl.Rt*gl.footPos[LF])(rbd::X);
     initial_feet_x[RF] = (gl.actual_base.x + gl.Rt*gl.footPos[RF])(rbd::X);
     initial_feet_x[LH] = (gl.actual_base.x + gl.Rt*gl.footPos[LH])(rbd::X);
@@ -227,102 +234,77 @@ void CrawlPlanner::run(double time,
         computeTerrainEstimation();
     }
 
-    //Run state-machine of crawl!
-    //fills in the base and joints variables
+    //normal  crawl (fills in base and joint variables)
     //crawlStateMachine(taskServoTime);
 
-
-    Vector3d footTarget, footTargetW;
-
-    /////////replanning
+    //crawl relanning
     if (replanningFlag)
     {
         //this time keeps track of the haptic planner,  but, differently from taskServoTime it stops if the optimization slows down the thread
         double sampleTime = sample*task_time_resolution;
         Vector2d userSpeed = Vector2d(linearSpeedX, linearSpeedY);
-        //old fixed windowsq
-        //        if ((sample % replanningWindow) == 0)
-        //        {
 
-        //this is the optimization
+        //this is the optimization part (called only at each touchdown)
         if (firstTime ||
                 (touchDown[LF] == replanning_steps) ||
                 (touchDown[RF] == replanning_steps) ||
                 (touchDown[LH] == replanning_steps) ||
                 (touchDown[RH] == replanning_steps) )
         {
-
-            //do the replan
             replanningStage++;
-            std::cout<<"----------------------------------------------------------------------"<<std::endl;
-            prt(replanningStage)
+            std::cout<<"replanningStage----------------------------------------------: "<<replanningStage<<std::endl;
 
-
-                    //set initial state for optimization to actual state (there might have been disturbances)
+            //set initial state for optimization to actual state (there might have been disturbances)
             if (!firstTime)
             {
-                //init feet
+                //set feet and com position to warm start the optimization
+                //init feet (in the world frame):
                 for (int leg = 0; leg<4;leg++)
                 {
-                    //desired values (in the wf!!!!!)  (just for debug)
-                    //initial_feet_x[leg] = feetStates[leg].x(sampleW);
-                    //initial_feet_y[leg] = feetStates[leg].y(sampleW);
-
                     if (!hapticCrawl)
                     {
-                        //footposdes
+                        //use desired values
                         initial_feet_x[leg] = mapBToWF(gl.footPosDes[leg])(rbd::X);
                         initial_feet_y[leg] = mapBToWF(gl.footPosDes[leg])(rbd::Y);
                     } else {
-                        //actual values (in the wf!!!!!)
+                        //use actual values
                         initial_feet_x[leg] = mapBToWF(gl.footPos[leg])(rbd::X);
                         initial_feet_y[leg] = mapBToWF(gl.footPos[leg])(rbd::Y);
                     }
                 }
-                //init com
-
-                //desired values
-                //actual_state_x = Vector3d ( des_com_pos.x(rbd::X),  des_com_pos.xd(rbd::X), 0.0);
-                //actual_state_y = Vector3d ( des_com_pos.x(rbd::Y), des_com_pos.xd(rbd::Y), 0.0);
-
-
-
+                //init com:
                 //use the actual state
                 actual_state_x = Vector3d ( gl.actual_CoM.x(rbd::X),  gl.actual_CoM.xd(rbd::X), 0.0);
                 actual_state_y = Vector3d ( gl.actual_CoM.x(rbd::Y),  gl.actual_CoM.xd(rbd::Y), 0.0);
-                touchDown[mySchedule->getCurrentSwing()] = 0; //reset touchdown
+                //reset touchdown for the current swing
+                touchDown[mySchedule->getCurrentSwing()] = 0;
+                //set the next swing leg in the schedule
                 mySchedule->next();
             } else {
                 firstTime = false;
-                prt("first time dont update actual state and initial feet they arelady have been initialized")
+                std::cout<<"first time dont update actual state and initial feet they arelady have been initialized"<<std::endl;
             }
-
-
-            //find the swing leg in sampleW and update the schedule to that and do the step
-
-            myPlanner->printSwing(mySchedule->getCurrentSwing());
-
-            LegDataMap<Vector2d> hip_offsets;
-            hip_offsets[LF] << 0.33, 0.32;   hip_offsets[LF] = gl.Rt.block(0,0,2,2)*hip_offsets[LF]; //rotate to base frame
-            hip_offsets[RF] << 0.33, -0.32;  hip_offsets[RF] = gl.Rt.block(0,0,2,2)*hip_offsets[RF];
-            hip_offsets[LH] << -0.33, 0.32;  hip_offsets[LH] = gl.Rt.block(0,0,2,2)*hip_offsets[LH];
-            hip_offsets[RH] << -0.33, -0.32; hip_offsets[RH] = gl.Rt.block(0,0,2,2)*hip_offsets[RH];
+            myPlanner->printSwing(mySchedule->getCurrentSwing()); //just print out
+            hip_offsets[LF] = gl.Rt.block(0,0,2,2)*hip_offsets[LF]; //rotate to base frame
+            hip_offsets[RF] = gl.Rt.block(0,0,2,2)*hip_offsets[RF];
+            hip_offsets[LH] = gl.Rt.block(0,0,2,2)*hip_offsets[LH];
+            hip_offsets[RH] = gl.Rt.block(0,0,2,2)*hip_offsets[RH];
             myPlanner->setHipOffsets(hip_offsets);
 
-            //recompute the new steps from the actual step
+            //recompute the new foothold steps from the actual com (if useComStepCorrection) and foot position
             if (useComStepCorrection)
             {
-            myPlanner->computeSteps(userSpeed,
-                                    initial_feet_x,
-                                    initial_feet_y,
-                                    number_of_steps,
-                                    horizon_size,
-                                    feetStates, footHolds,
-                                    A, b, *myPlanner,
-                                    mySchedule->getCurrentSwing(),
-                                    Vector2d(gl.actual_base.x(rbd::X),gl.actual_base.x(rbd::Y)));
-              dummy1 =  myPlanner->getDummyVars(1);
-              dummy2 =  myPlanner->getDummyVars(2);
+                myPlanner->computeSteps(userSpeed,
+                                        initial_feet_x,
+                                        initial_feet_y,
+                                        number_of_steps,
+                                        horizon_size,
+                                        feetStates, footHolds,
+                                        A, b, *myPlanner,
+                                        mySchedule->getCurrentSwing(),
+                                        Vector2d(gl.actual_base.x(rbd::X),gl.actual_base.x(rbd::Y)));
+                dummy1 =  myPlanner->getDummyVars(1);
+                dummy2 =  myPlanner->getDummyVars(2);
             } else {
               myPlanner->computeSteps(userSpeed,
                                     initial_feet_x,
@@ -333,58 +315,54 @@ void CrawlPlanner::run(double time,
                                     A, b, *myPlanner,
                                     mySchedule->getCurrentSwing());
             }
-
             //print_foot_holds();
 
-            //replan from the actual state and the new steps overwriting the jerk
+            //replan from the actual state and the new set of footholds overwriting the vector of jerk
             if (!optimizeVelocityFlag){
                 weight_R = 1e-06; weight_Q = 1; myPlanner->setWeights(weight_R, weight_Q);
                 myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
             }
-            else {
+            else {//tries to achieve the userSpeed at the end of the replanning window
                 weight_R = 0.01; weight_Q = 1; myPlanner->setWeights(weight_R, weight_Q);
                 myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,userSpeed,jerk_x,jerk_y,replanningWindow);
-             }
-
-            //prt(initial_feet_y)
-            //save it
-            //for the log compute the whole traj
+            }
+            //for visualization purposes compute the whole trajectories from the jerk vector
+            //com
             myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_x);
             myPlanner->computeCOMtrajectory( actual_state_y, jerk_y, des_com_y);
+            //come velocity
             myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_xd, MPCPlanner::VELOCITY);
             myPlanner->computeCOMtrajectory( actual_state_y, jerk_y, des_com_yd, MPCPlanner::VELOCITY);
+            //zmp
             myPlanner->computeZMPtrajectory( actual_state_x, jerk_x, zmp_x);
             myPlanner->computeZMPtrajectory( actual_state_y, jerk_y, zmp_y);
 
+            //compute the constraint violation (e.g. how close I am o the bounds) for debugging reasons
             viol = myPlanner->getConstraintViolation(feetStates);
-            //reset the counter
-            sampleW = 0;
-            std::cout<<"start stance"<<std::endl;
 
+            //reset the counter for the replanning window
+            sampleW = 0;
+            std::cout<<"Start stance"<<std::endl;
         }//end of the optimization
 
+        //this part runs at task_time_resolution
 
-
-        //old
-        //            des_com_pos.x(rbd::X) = des_com_x(sampleW);
-        //            des_com_pos.x(rbd::Y) = des_com_y(sampleW);
-        //            des_com_pos.xd(rbd::X) = des_com_xd(sampleW);
-        //            des_com_pos.xd(rbd::Y) = des_com_yd(sampleW);
-
-        //interpolate stuff cause time resolution of the traj is different than taskservo time
+        //interpolate because time_resolution of the traj is different than task_time_resolution
         LegBoolMap liftOffFlag;
         int n = static_cast<int>(sampleTime/time_resolution);
+        //remainder
         double rem = sampleTime - n*time_resolution;
-        if (rem == 0.0)//update interpolators when the samples are changing
+        if (rem == 0.0)//update the interpolators only when the samplesW are changing (e.g. each time_resolution)
         {
             //std::cout<<"update interpolators, sampleTime = "<<sampleTime<<std::endl;
             interpolateCoMPositionX.setBoundary(sampleTime,time_resolution,des_com_x(sampleW), des_com_x(sampleW+1));
             interpolateCoMPositionY.setBoundary(sampleTime,time_resolution,des_com_y(sampleW), des_com_y(sampleW+1));
             interpolateCoMVelocityX.setBoundary(sampleTime,time_resolution,des_com_xd(sampleW), des_com_xd(sampleW+1));
             interpolateCoMVelocityY.setBoundary(sampleTime,time_resolution,des_com_yd(sampleW), des_com_yd(sampleW+1));
-             //whenever a liftoff is expected set the swing params
+            //whenever a liftoff is expected from the plan, set the swing params
             liftOffFlag = detectLiftOff(feetStates, sampleW);
-            sampleW++; //the update happens each time_resolution samples, at a lower frequency
+            //this update happens each time_resolution samples, at a lower frequency
+            sampleW++;
         }
 
         interpolateCoMPositionX.getPoint(sampleTime, des_com_pos.x(rbd::X));
@@ -392,12 +370,15 @@ void CrawlPlanner::run(double time,
         interpolateCoMVelocityX.getPoint(sampleTime, des_com_pos.xd(rbd::X));
         interpolateCoMVelocityY.getPoint(sampleTime, des_com_pos.xd(rbd::Y));
 
+        //set swing spliner parameters at liftoff
         for (int leg = LF ; leg <=RH; leg++)
         {
             if (liftOffFlag[leg])
             {
                 footTarget = mapWFToB(Vector3d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW), 0.0));
                 footTargetW = gl.actual_base.x + gl.Rt*footTarget;
+                //this is the delta step in the bse frame (concident with the swing frame for flat terrains)
+                //TODO generalize with a compute step strategy
                 Vector3d deltaFoot = footTarget - gl.footPos[leg];
                 if (!hapticCrawl)
                 {
@@ -410,44 +391,28 @@ void CrawlPlanner::run(double time,
                 std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
             }
         }
-
-        //creates the swing with only desired values
-        // set des feet
-        //            for (int leg = LF ; leg <=RH; leg++)
-        //            {
-        //                if (!feetStates[leg].swing(sampleW))
-        //                {
-        //                    gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
-        //                } else {
-        //                    //work out the new swing foot
-        //                    gl.footPosDes[leg].segment(rbd::X, 2) = Vector2d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW)) - Vector2d(des_com_x(sampleW), des_com_y(sampleW)) + (gl.Rt*gl.offCoM).segment(rbd::X,2);
-        //                    gl.stance_legs[leg] = false;
-        //                }
-        //            }
-
-        //creates the swing with the footspliner
+        //creates the swing trajectory with the footspliner, and detect haptic touchdown
         for (int leg = LF ; leg <=RH; leg++)
         {
-            if (!gl.stance_legs[leg])
+            if (!gl.stance_legs[leg]) //swing leg
             {
-                //for the swing set  the trajectory
+                //for the swing get the trajectory point by point
                 footSpliner[leg].getPoint(sampleTime, gl.swingFootRef[leg]);
                 gl.footPosDes[leg] = gl.swingFootRef[leg].x;
                 gl.footVelDes[leg] = gl.swingFootRef[leg].xd;
-
                 bool stop_condition = false;
                 //detect touchdown
                 if (hapticCrawl) //haptically
                 {
                     if (footSpliner[leg].isSwingingDown())
-                    {
                         stop_condition = (gl.vec_incl[leg].dot(gl.R.transpose()*gl.grForces[leg])>=force_th);
-                    }
                 } else { //programmatically
                     if (!feetStates[leg].swing(sampleW))
                         stop_condition = true;
                 }
-                if (stop_condition){
+
+                if (stop_condition)
+                {
                     gl.stance_legs[leg] = true; //the foot pos will be determined by the integrazion of base motion
                     touchDown[mySchedule->getCurrentSwing()]++;
                     std::cout<<touchDown[mySchedule->getCurrentSwing()] <<" touchdown of  "<<legmap[leg]<<" leg"<<std::endl;
@@ -463,15 +428,10 @@ void CrawlPlanner::run(double time,
                 }
             }
 
-            //            display_->drawSphere(Vector3d(des_com_x(sampleW),des_com_y(sampleW),0.0),
-            //                                 0.1,
-            //                                 dwl::Color(dwl::ColorType::Green,1.),
-            //                                 "world");
         }
         sample++;
-        //////////////////////////
 
-        //plotting footsteps and com trajectory (dont start from the actual)
+        //plotting footsteps
         std::map<int, dwl::ColorType> colormap;
         colormap[iit::dog::LF] = dwl::ColorType::Red;
         colormap[iit::dog::RF] = dwl::ColorType::Blue;
@@ -488,7 +448,8 @@ void CrawlPlanner::run(double time,
                                      dwl::Color(colormap[leg], 0.5 + 0.5*transparency),
                                      "world");
             }
-        }
+        }     
+
         //plot com trajectory on ground plane
         for (int i=0; i<des_com_x.size(); i++)
         {
@@ -501,7 +462,6 @@ void CrawlPlanner::run(double time,
             //                                     "world");
             //            }
         }
-
         //plot com / zmp trajectory on ground plane
         for (int i=0; i<zmp_x.size(); i++)
         {
@@ -515,19 +475,9 @@ void CrawlPlanner::run(double time,
             }
         }
 
-
-        //debug stuff
-//        display_->drawSphere(Vector3d(footTargetW(rbd::X),footTargetW(rbd::Y),0.02),
-//                             0.08,
-//                             dwl::Color(dwl::ColorType::Red,0.2),
-//                             "world");
+        //draw the correction
         if (useComStepCorrection)
         {
-
-//            display_->drawSphere(dummy1[LF],   0.05,   dwl::Color(dwl::ColorType::Black,1.),  "world");
-//            display_->drawSphere(dummy1[RF],   0.05,   dwl::Color(dwl::ColorType::Black,1.),  "world");
-//            display_->drawSphere(dummy1[LH],   0.05,   dwl::Color(dwl::ColorType::Black,1.),  "world");
-//            display_->drawSphere(dummy1[RH],   0.05,   dwl::Color(dwl::ColorType::Black,1.),  "world");
             dwl::ArrowProperties arrow(0.02, 0.05, 0.0);
             display_->drawArrow(Vector3d(initial_feet_x[LF],initial_feet_y[LF],0.02),Vector3d(initial_feet_x[LF],initial_feet_y[LF],0.02)   + dummy2[LF], arrow, dwl::Color(dwl::ColorType::Red, 1.),"world");
             display_->drawArrow(Vector3d(initial_feet_x[RF],initial_feet_y[RF],0.02),Vector3d(initial_feet_x[RF],initial_feet_y[RF],0.02)   + dummy2[RF], arrow, dwl::Color(dwl::ColorType::Red, 1.),"world");
@@ -535,9 +485,14 @@ void CrawlPlanner::run(double time,
             display_->drawArrow(Vector3d(initial_feet_x[RH],initial_feet_y[RH],0.02),Vector3d(initial_feet_x[RH],initial_feet_y[RH],0.02)   + dummy2[RH], arrow, dwl::Color(dwl::ColorType::Red, 1.),"world");
         }
 
+        //debug target
+//        display_->drawSphere(Vector3d(footTargetW(rbd::X),footTargetW(rbd::Y),0.02),
+//                             0.08,
+//                             dwl::Color(dwl::ColorType::Red,0.2),
+//                             "world");
+
     }
-
-
+    //finished crawl replanning
 
     //common stuff to crawl and replanning crawl
     //draw des speed

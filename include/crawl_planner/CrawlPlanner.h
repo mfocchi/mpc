@@ -148,6 +148,8 @@ protected:
     iit::dog::LegDataMap<double> initial_feet_x;
     iit::dog::LegDataMap<double> initial_feet_y;
     Eigen::MatrixXd A; VectorXd b;
+    iit::dog::LegDataMap<Vector2d> hip_offsets;
+    Vector3d footTarget, footTargetW;
     iit::dog::LegDataMap<int> touchDown = 0;
     double disturbance = 0.0;
     std::shared_ptr<MPCPlanner> myPlanner;
