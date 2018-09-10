@@ -150,7 +150,7 @@ void CrawlPlanner::starting(double time) {
     replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
     std::cout<<"replanningWindow is :"<<replanningWindow<< std::endl;
     useComStepCorrection = gl.config_.get<bool>("Replanning.useComStepCorrection");
-    optimizeVelocityFlag = gl.config_.get<bool>("Replanning.optimocity");
+    optimizeVelocityFlag = gl.config_.get<bool>("Replanning.optimizeVelocity");
 
     //init the planner
     myPlanner.reset(new MPCPlanner(horizon_size,    time_resolution,   rbd::g));
