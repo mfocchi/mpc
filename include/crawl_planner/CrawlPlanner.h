@@ -117,6 +117,7 @@ protected:
     Vector3d mapBToWF(Vector3d B_vec_in);
     Vector3d mapWFToB(Vector3d W_vec_in);
     void interactiveChangeParams(void);
+    void resetPlanner();
 
     //init params for replanning stage
     double horizon_duration = 8.0;

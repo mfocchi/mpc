@@ -141,19 +141,10 @@ void CrawlPlanner::starting(double time) {
 
     //init replanning stuff
     task_time_resolution = 1.0/planning_rate_; //time resolution of the haptic planner
-    horizon_size = horizon_duration / time_resolution;
-    std::cout<<"horizon_duration is :"<<horizon_duration<< std::endl;
-    std::cout<<"time_resolution is (should be a multiple of task_planning_rate):"<<time_resolution<< std::endl;
-    std::cout<<"horizon size is :"<<horizon_size<< std::endl;
-    std::cout<<"number of steps is :"<<number_of_steps<< std::endl;
-    std::cout<<"userspeed is X:"<<linearSpeedX <<"  Y: "<<linearSpeedY << std::endl;
-    replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
-    std::cout<<"replanningWindow is :"<<replanningWindow<< std::endl;
+    resetPlanner();
     useComStepCorrection = gl.config_.get<bool>("Replanning.useComStepCorrection");
     optimizeVelocityFlag = gl.config_.get<bool>("Replanning.optimizeVelocity");
 
-    //init the planner
-    myPlanner.reset(new MPCPlanner(horizon_size,    time_resolution,   rbd::g));
     des_com_x.resize(horizon_size); des_com_x.setZero();
     des_com_y.resize(horizon_size); des_com_x.setZero();
     des_com_xd.resize(horizon_size); des_com_xd.setZero();
@@ -193,6 +184,7 @@ void CrawlPlanner::starting(double time) {
     dummy2= Vector3d::Zero();
     printf("Crawl planner: finished starting\n");
 }
+
 
 
 void CrawlPlanner::run(double time,
@@ -932,8 +924,11 @@ void CrawlPlanner::start_replanning_crawl()
 {
     if (!replanningFlag)
     {
-        newline::getInt("number_of_steps in the horizon:", number_of_steps, number_of_steps);
-        newline::getInt("replanning steps:", replanning_steps, replanning_steps);
+        newline::getDouble("Horizon duration?:", horizon_duration, horizon_duration);
+        newline::getDouble("Time resolution?:", time_resolution, time_resolution);
+        newline::getInt("Number_of_steps in the horizon?:", number_of_steps, number_of_steps);
+        newline::getInt("Replanning steps?:", replanning_steps, replanning_steps);
+        resetPlanner();
         sample = 0;
         sampleW = 0;
         firstTime = true;
@@ -1022,6 +1017,20 @@ void CrawlPlanner::toggleOptimizeVelocity()
         optimizeVelocityFlag = true;
         std::cout<< "optimize velocity ON" <<std::endl;
     }
+}
+void CrawlPlanner::resetPlanner()
+{
+    horizon_size = horizon_duration / time_resolution;
+    std::cout<<"horizon_duration is :"<<horizon_duration<< std::endl;
+    std::cout<<"time_resolution is (should be a multiple of task_planning_rate):"<<time_resolution<< std::endl;
+    std::cout<<"horizon size is :"<<horizon_size<< std::endl;
+    std::cout<<"number of steps is :"<<number_of_steps<< std::endl;
+    std::cout<<"userspeed is X:"<<linearSpeedX <<"  Y: "<<linearSpeedY << std::endl;
+    replanningWindow = horizon_size/number_of_steps; //after one 4stance and one 3 stance replan using the actual_swing, and actual foot pos and and actual com
+    std::cout<<"replanningWindow is :"<<replanningWindow<< std::endl;
+    //init the planner
+    myPlanner.reset(new MPCPlanner(horizon_size,    time_resolution,   rbd::g));
+
 }
 
 }//namespace
