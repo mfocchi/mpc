@@ -815,12 +815,14 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     //init stuff
     number_of_constraints = 0;
     start_phase_index = 0;
-    phase_duration = step_knots/2; //10 samples both swing and phase
-    A.resize((4+4)*phase_duration*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
-    b.resize((4+4)*phase_duration*number_of_steps);
+    phase_duration = floor(step_knots/2); //10 samples both swing and phase NB this can be not a integer so you need to floor
+    A.resize(4*step_knots*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
+    b.resize(4*step_knots*number_of_steps);
     A.setZero();
     b.setZero();
-
+    if(debug_mode){
+       std::cout<<"phase duration "<<phase_duration<<std::endl;
+    }
 
     for (int leg=0;leg<4;leg++){
         feetStates[leg].resize(horizon_size);
