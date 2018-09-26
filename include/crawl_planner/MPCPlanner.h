@@ -106,6 +106,7 @@ class MPCPlanner
         void setHorizonSize(int horizon);
         Eigen::VectorXd makeGaussian(const int length, const int mean, const int stddev);
         Eigen::VectorXd  getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates);
+        void  getSlacks(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & min_slacks, Eigen::VectorXd & avg_slacks);
 
         void computeSteps(const iit::dog::LegDataMap<double> & initial_feet_x,
                           const iit::dog::LegDataMap<double> & initial_feet_y,
@@ -164,6 +165,7 @@ class MPCPlanner
         int horizon_size_;
         Eigen::VectorXd initial_state_;
         Eigen::VectorXd all_violations_;
+        Eigen::VectorXd slacks;
 
         double weight_R, weight_Q, weight_Qa, weight_Qs;
         Eigen::Matrix<double,3,3> A;

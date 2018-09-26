@@ -41,7 +41,7 @@ double weight_Qs = 100;
 VectorXd  jerk_x, jerk_y;
 Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
 Vector3d  initial_state_y = Vector3d(0.0,-0.0,0.0);
-VectorXd zmp_x, zmp_y, com_x, com_y, viol;
+VectorXd zmp_x, zmp_y, com_x, com_y, viol, avg_slacks, min_slacks;
 MatrixXd A; VectorXd b;
 
 int optimizeVelocityFlag = true;
@@ -114,6 +114,7 @@ if (!optimizeVelocityFlag){
     }
 }
 viol = myPlanner.getConstraintViolation(feetStates);
+myPlanner.getSlacks(feetStates, min_slacks, avg_slacks);
 //prt(jerk_x.transpose())
 //prt(jerk_y.transpose())
 
@@ -135,6 +136,8 @@ myPlanner.saveTraj("com_y.txt", com_y);
 myPlanner.saveTraj("com_xd.txt", com_xd);
 myPlanner.saveTraj("com_yd.txt", com_yd);
 myPlanner.saveTraj("viol.txt",  viol);
+myPlanner.saveTraj("avg_slacks.txt",  avg_slacks);
+myPlanner.saveTraj("min_slacks.txt",  min_slacks);
 
 myPlanner.saveTraj("footPosLF.txt",  feetStates[LF].x, feetStates[LF].y);
 myPlanner.saveTraj("footPosRF.txt",  feetStates[RF].x, feetStates[RF].y);

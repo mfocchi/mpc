@@ -27,7 +27,8 @@ swing=[];
 [time,jerk_y] =  textread('jerk_y.txt', format_input);
 
 [time,viol] = textread('viol.txt', format_input);
-
+[time,avg_slacks] = textread('avg_slacks.txt', format_input);
+[time,min_slacks] = textread('min_slacks.txt', format_input);
 
 [step,footHoldsLF(:,1), footHoldsLF(:,2)] = textread('footHoldsLF.txt', format_input2);
 [step,footHoldsRF(:,1), footHoldsRF(:,2)] = textread('footHoldsRF.txt', format_input2);
@@ -138,24 +139,30 @@ for i=1:length(time)
     xlim([-1 ,2])
     ylim([-1.1 ,2.0])
     
-    
+
     
     subplot(3,1,2)
     plot(time(i), viol(i),'.b','MarkerSize',20); hold on; grid on;
     xlim([0, time(end)])
-    ylim([0,1])
+    ylim([-1,1])
     ylabel('constr.viol')
     
-    subplot(3,1,3)
-    plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
-    plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
-    plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
-    plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
+        subplot(3,1,3)
+    plot(time(i), avg_slacks(i),'.r','MarkerSize',20); hold on; grid on;
+      plot(time(i), min_slacks(i),'.b','MarkerSize',20); hold on; grid on;
     xlim([0, time(end)])
-    ylim([0,1.1])
-    ylabel('swing leg')
+ legend('avg slack','min slack')
+    ylabel('slacks')
     
-    legend('LF','RF','LH','RH')
+%     subplot(3,1,3)
+%     plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
+%     plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
+%     plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
+%     plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
+%     xlim([0, time(end)])
+%     ylim([0,1.1])
+%     ylabel('swing leg')
+%        legend('LF','RF','LH','RH')
     pause(0.001+ 1/time)
     drawnow
     
