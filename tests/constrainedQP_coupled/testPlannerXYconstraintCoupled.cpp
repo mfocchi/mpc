@@ -36,6 +36,7 @@ double height = 0.5;
 double Ts = 0.1;
 double weight_R = 1e-06;
 double weight_Q = 1;
+double weight_Qs = 100;
 
 VectorXd  jerk_x, jerk_y;
 Vector3d  initial_state_x = Vector3d(0.0, 0.0,0.0);
@@ -44,6 +45,7 @@ VectorXd zmp_x, zmp_y, com_x, com_y, viol;
 MatrixXd A; VectorXd b;
 
 int optimizeVelocityFlag = true;
+int useSlacks = false;
 double disturbance = 0.0;
 
 VectorXd com_xd, com_yd;
@@ -55,6 +57,7 @@ userSpeed(1)=0.0;
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
 newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
+newline::getInt("use slacks?[0/1]:", useSlacks, useSlacks);
 
 //newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
 //newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
@@ -90,20 +93,29 @@ initial_feet_y[RH] = initial_state_y(0) -1.0;
 /////old stuff rewritten with compute steps function
 myPlanner.computeSteps(initial_feet_x, initial_feet_y, distance, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner);
 if (!optimizeVelocityFlag){
-    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b,jerk_x,jerk_y);
-    prt(A)
-            prt(b)
+        myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, jerk_x,jerk_y);
 }else {
-    weight_R = 0.01; //gives good results
-    newline::getDouble("weight R:", weight_R, weight_R);
-    newline::getDouble("weight Q:", weight_Q, weight_Q);
-    myPlanner.setWeights(weight_R, weight_Q);
-    //velocity is enforced at the end of the horizon
-    myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
+    //to add robustness use slacks! will keep the zmp in the middle of the polygons
+    if (useSlacks){
+        weight_R = 1e-06; //jerk
+        newline::getDouble("weight R(jerk):", weight_R, weight_R);
+        newline::getDouble("weight Q (velocity):", weight_Q, weight_Q);
+        newline::getDouble("weight Qs(slacks):", weight_Qs, weight_Qs);
+        myPlanner.setWeights(weight_R, weight_Q, weight_Qs);
+        myPlanner.solveQPConstraintCoupledSlacks(height,initial_state_x, initial_state_y , A,b,userSpeed, jerk_x,jerk_y);
+
+    } else{
+        weight_R = 0.01; //gives good results
+        newline::getDouble("weight R (jerk):", weight_R, weight_R);
+        newline::getDouble("weight Q (velocity):", weight_Q, weight_Q);
+        myPlanner.setWeights(weight_R, weight_Q);
+        //velocity is enforced at the end of the horizon
+        myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
+    }
 }
 viol = myPlanner.getConstraintViolation(feetStates);
-prt(jerk_x.transpose())
-prt(jerk_y.transpose())
+//prt(jerk_x.transpose())
+//prt(jerk_y.transpose())
 
 myPlanner.computeZMPtrajectory( initial_state_x, jerk_x, zmp_x);
 myPlanner.computeZMPtrajectory( initial_state_y, jerk_y, zmp_y);

@@ -131,8 +131,9 @@ for i=1:length(time)
     subplot(3,1,1)
     h = plotPolygon(stance_vec);   
     hold on
-    h(length(h)+1) = plot(zmp_x(i), zmp_y(i),'.r','MarkerSize',30);
-    h(length(h)+2) = plot(com_x(i), com_y(i),'.k','MarkerSize',30);
+    h(length(h)+2) = plot(com_x(i), com_y(i),'.g','MarkerSize',30);
+    h(length(h)+1) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);
+
     legend([h(length(h)+1) h(length(h)+2)], 'zmp', 'com','location', 'West')
     xlim([-1 ,2])
     ylim([-1.1 ,2.0])
@@ -175,7 +176,7 @@ end
 %close(simfig)
 
 
-
-figure
-[x,y]= gaussianVector(10,5,2)
-plot(x,y)
+%to show importance weighting
+% figure
+% [x,y]= gaussianVector(10,5,2)
+% plot(x,y)
