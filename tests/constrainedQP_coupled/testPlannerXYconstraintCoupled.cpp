@@ -115,6 +115,8 @@ if (!optimizeVelocityFlag){
 }
 viol = myPlanner.getConstraintViolation(feetStates);
 myPlanner.getSlacks(feetStates, min_slacks, avg_slacks);
+VectorXd centroidX,centroidY;
+myPlanner.computeCentroid(feetStates, centroidX, centroidY);
 //prt(jerk_x.transpose())
 //prt(jerk_y.transpose())
 
@@ -138,6 +140,8 @@ myPlanner.saveTraj("com_yd.txt", com_yd);
 myPlanner.saveTraj("viol.txt",  viol);
 myPlanner.saveTraj("avg_slacks.txt",  avg_slacks);
 myPlanner.saveTraj("min_slacks.txt",  min_slacks);
+myPlanner.saveTraj("centroidX.txt",  centroidX);
+myPlanner.saveTraj("centroidY.txt",  centroidY);
 
 myPlanner.saveTraj("footPosLF.txt",  feetStates[LF].x, feetStates[LF].y);
 myPlanner.saveTraj("footPosRF.txt",  feetStates[RF].x, feetStates[RF].y);

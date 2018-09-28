@@ -29,6 +29,9 @@ swing=[];
 [time,viol] = textread('viol.txt', format_input);
 [time,avg_slacks] = textread('avg_slacks.txt', format_input);
 [time,min_slacks] = textread('min_slacks.txt', format_input);
+[time,centroidX] = textread('centroidX.txt', format_input);
+[time,centroidY] = textread('centroidY.txt', format_input);
+
 
 [step,footHoldsLF(:,1), footHoldsLF(:,2)] = textread('footHoldsLF.txt', format_input2);
 [step,footHoldsRF(:,1), footHoldsRF(:,2)] = textread('footHoldsRF.txt', format_input2);
@@ -132,9 +135,11 @@ for i=1:length(time)
     subplot(3,1,1)
     h = plotPolygon(stance_vec);   
     hold on
-    h(length(h)+2) = plot(com_x(i), com_y(i),'.g','MarkerSize',30);
-    h(length(h)+1) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);
-
+    h(length(h)+1) = plot(com_x(i), com_y(i),'.g','MarkerSize',30);
+    h(length(h)+2) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);
+    
+    h(length(h)+3) = plot(centroidX(i), centroidY(i),'.b','MarkerSize',40);
+    
     legend([h(length(h)+1) h(length(h)+2)], 'zmp', 'com','location', 'West')
     xlim([-1 ,2])
     ylim([-1.1 ,2.0])

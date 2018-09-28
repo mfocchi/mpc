@@ -107,6 +107,7 @@ class MPCPlanner
         Eigen::VectorXd makeGaussian(const int length, const int mean, const int stddev);
         Eigen::VectorXd  getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates);
         void  getSlacks(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & min_slacks, Eigen::VectorXd & avg_slacks);
+        void  computeCentroid(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & centroidX, Eigen::VectorXd & centroidY);
 
         void computeSteps(const iit::dog::LegDataMap<double> & initial_feet_x,
                           const iit::dog::LegDataMap<double> & initial_feet_y,

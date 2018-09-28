@@ -58,6 +58,7 @@ MPCPlanner::MPCPlanner(const double horizon_size, const double Ts, const double 
 //    loadGains(filename);
 //
 //    initial_state_.resize();
+    slacks.resize(0);
 
     legmap[iit::dog::LF] = "LF";
     legmap[iit::dog::RF] = "RF";
@@ -347,6 +348,7 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     //2- new using 1 slack for each constraints
     //we have both jerk (N) and slack vars (2N)
     int number_of_slacks = 2*horizon_size_;
+    slacks.resize(number_of_slacks);
     GQ.resize(horizon_size_+number_of_slacks,horizon_size_+number_of_slacks);
     g0.resize(horizon_size_+number_of_slacks,1);g0.setZero();
     CI.resize(2*horizon_size_+number_of_slacks,horizon_size_+number_of_slacks);
@@ -643,14 +645,15 @@ void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
     //state is jexk X, Y and a number of slack equal to the constraints
     GQ.resize(2*horizon_size_+number_of_poly_constraints,2*horizon_size_+number_of_poly_constraints); GQ.setZero();
     g0.resize(2*horizon_size_+number_of_poly_constraints,1); g0.setZero();
-    solution.resize(2*horizon_size_+number_of_poly_constraints);
 
     //with slacks
     CI.resize(2*number_of_poly_constraints,2*horizon_size_+number_of_poly_constraints);CI.setZero(); //max /min for all horizon
     ci0.resize(2*number_of_poly_constraints);    ci0.setZero();
-
+    //outputs
+    solution.resize(2*horizon_size_+number_of_poly_constraints);
     jerk_vector_x.resize(horizon_size_);
     jerk_vector_y.resize(horizon_size_);
+        slacks.resize(number_of_poly_constraints);
     //update with height
     Cz << 1 , 0  , -height_/gravity_;
     buildMatrix(Cz,Zx,Zu);
@@ -724,10 +727,9 @@ void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
     //add slack part to the cost function that starts at 2N,2N
     //GQ shoud be positive definite
 
-    GQ.block(2*horizon_size_,2*horizon_size_, number_of_poly_constraints,number_of_poly_constraints).setIdentity();
-    GQ.block(2*horizon_size_,2*horizon_size_, number_of_poly_constraints,number_of_poly_constraints)*=weight_Qs; //
+    GQ.block(2*horizon_size_,2*horizon_size_, number_of_poly_constraints,number_of_poly_constraints) = weight_Qs*MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
     //the linear part comes from slacks   ones(1000)^T*Qs*w
-    g0.segment(2*horizon_size_,number_of_poly_constraints).setConstant(-1000*weight_Qs);
+    g0.segment(2*horizon_size_,number_of_poly_constraints) = MatrixXd::Ones(1,number_of_poly_constraints) *1000*weight_Qs;
 
     ///////////////////////////////////////////////////
     //no equality constraints
@@ -750,8 +752,10 @@ void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
 
     //ad slack part to the inequalities
     //A*x+b + w >=0 / w<0 for robustness
-    CI.block(0, 2*horizon_size_, number_of_poly_constraints, number_of_poly_constraints) = -MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
-    CI.block(number_of_poly_constraints, 2*horizon_size_, number_of_poly_constraints, number_of_poly_constraints) = MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
+    //robustness
+    CI.block(0, 2*horizon_size_, number_of_poly_constraints, number_of_poly_constraints) = MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
+    //negativity of slacks
+    CI.block(number_of_poly_constraints, 2*horizon_size_, number_of_poly_constraints, number_of_poly_constraints) = -MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
 
 
     double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
@@ -759,7 +763,8 @@ void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
         {cout<<"couldn't find a feasible solution"<<endl;}
     else {
         //prt(solution.transpose())
-        std::cout<<"Slacks: " << solution.segment(2*horizon_size_,number_of_poly_constraints).transpose() << std::endl;//slacks
+        slacks = solution.segment(2*horizon_size_,number_of_poly_constraints);
+        std::cout<<"Slacks: " << slacks.transpose() << std::endl;//slacks
         jerk_vector_x = solution.segment(0,horizon_size_);
         jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
     }
@@ -782,9 +787,9 @@ void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
         std::cout<<"jerk cost Cj: "<<0.5*jerkVectors.transpose()*Gjerk*jerkVectors <<std::endl;
         std::cout<<"acc cost Ca: "<<0.5*jerkVectors.transpose()*Ga*jerkVectors <<std::endl ;
         std::cout<<"vel cost Cv: "<<0.5*jerkVectors.transpose()*Gv*jerkVectors + gv.transpose()*jerkVectors<<std::endl;
-        std::cout<<"slack cost: "<<0.5*(-MatrixXd::Ones(number_of_poly_constraints, 1) - solution.segment(2*horizon_size_,number_of_poly_constraints)).transpose()*
+        std::cout<<"slack cost: "<<0.5*(-MatrixXd::Ones(number_of_poly_constraints, 1) - slacks).transpose()*
                                        weight_Qs*
-                                        (-MatrixXd::Ones(number_of_poly_constraints, 1) - solution.segment(2*horizon_size_,number_of_poly_constraints))<<std::endl;
+                                        (-MatrixXd::Ones(number_of_poly_constraints, 1) - slacks)<<std::endl;
     }
     //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
 
@@ -911,6 +916,54 @@ void  MPCPlanner::buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetS
         }
     }
 
+}
+
+void   MPCPlanner::getSlacks(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & min_slacks, Eigen::VectorXd & avg_slacks)
+{
+    avg_slacks.resize(horizon_size_);
+    min_slacks.resize(horizon_size_);
+    int number_of_constraints = 0;
+     for (int i =0; i<horizon_size_;i++)
+     {
+         //count numner of edges
+         int number_of_edges = 0;
+         for (int leg =0; leg<4; leg++)
+         {
+             if (!feetStates[leg].swing(i))
+                  number_of_edges++;
+         }
+
+         number_of_constraints +=number_of_edges;
+         avg_slacks(i) = slacks.segment(number_of_constraints, number_of_edges).mean();
+         min_slacks(i) = slacks.segment(number_of_constraints, number_of_edges).maxCoeff();
+     }
+
+}
+
+void   MPCPlanner::computeCentroid(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & centroidX, Eigen::VectorXd & centroidY)
+{
+    centroidX.resize(horizon_size_);
+    centroidY.resize(horizon_size_);
+
+     for (int i =0; i<horizon_size_;i++)
+     {
+         //count numner of edges
+         int number_of_stances = 0;
+         double sumfeetX = 0.0;
+         double sumfeetY = 0.0;
+
+         for (int leg =0; leg<4; leg++)
+         {
+             if (!feetStates[leg].swing(i))
+             {
+                 sumfeetX+=feetStates[leg].x(i);
+                 sumfeetY+=feetStates[leg].y(i);
+                 number_of_stances++;
+             }
+         }
+         centroidX(i) = sumfeetX/number_of_stances;
+         centroidY(i) = sumfeetY/number_of_stances;
+     }
 }
 
 Eigen::VectorXd   MPCPlanner::getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates)
