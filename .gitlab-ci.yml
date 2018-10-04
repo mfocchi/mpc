@@ -1,10 +1,11 @@
-# External
+#External
 #include: 'http://server-dev/.amazing-script.yml'
-# Within the repository
+#Within the repository
 #include: "/templates/.amazing-script.yml"
 
 stages:
    - preamble
+   - build
    - deploy
 
 # WARNING: Remember to change the TAG based on the branch: master -> stable, develop -> latest, any-other-branch -> latest
@@ -25,6 +26,14 @@ preamble:
       - version
       - release
 
+build-and-test:
+  image: server-dev:5000/dls-dev:$TAG
+  stage: build
+  script:
+    - source /root/dls_gitlab_ci/gitlab-ci.bash
+    - source /opt/ros/dls-distro/setup.bash
+    - catkin_make -DCMAKE_BUILD_TYPE=Debug && catkin_make run_tests && catkin_make test
+
 deploy:
   image: server-dev:5000/dls-dev:$TAG
   stage: deploy
@@ -34,3 +43,4 @@ deploy:
   only:
   - master
   - develop
+
