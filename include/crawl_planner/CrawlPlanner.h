@@ -220,6 +220,11 @@ protected:
     double stab_margin = 0.08;
     double stab_margin_max = 0.2;
 
+    /** @brief Ros node handle */
+    ros::NodeHandle node_;
+
+    /** @brief internal stance computation client */
+    ros::ServiceClient internal_stance_clt_;
 };
 
 

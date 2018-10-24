@@ -58,6 +58,10 @@ bool CrawlPlanner::init()
     unsigned int num_joints_ = fbs_->getJointDoF();
     planned_ws_.setJointDoF(num_joints_);
 
+
+    // Declaring ROS clients
+    internal_stance_clt_ = node_.serviceClient<std_srvs::Empty>("/internal_stance_service");
+
     printf(BLUE "Initialization of the CrawlPlanner accomplished\n" COLOR_RESET);
 
     return true;
@@ -182,6 +186,14 @@ void CrawlPlanner::starting(double time) {
     }
     dummy1= Vector3d::Zero();
     dummy2= Vector3d::Zero();
+
+
+    std::cout << "Setting internal stance computation in trunk controller (Service Call)" << std::endl;
+    std_srvs::Empty internal_stance_msgs;
+    if (internal_stance_clt_.call(internal_stance_msgs)) {}
+    else {
+        ROS_ERROR("Failed to call service for internal stance computation in trunk controller");
+    }
     printf("Crawl planner: finished starting\n");
 }
 
@@ -227,7 +239,7 @@ void CrawlPlanner::run(double time,
     }
 
     //normal  crawl (fills in base and joint variables)
-    //crawlStateMachine(taskServoTime);
+    crawlStateMachine(taskServoTime);
 
     //crawl relanning
     if (replanningFlag)
