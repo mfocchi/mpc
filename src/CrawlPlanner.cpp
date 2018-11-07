@@ -375,12 +375,25 @@ void CrawlPlanner::run(double time,
         interpolateCoMVelocityY.getPoint(sampleTime, des_com_pos.xd(rbd::Y));
 
         //set swing spliner parameters at liftoff
+
         for (int leg = LF ; leg <=RH; leg++)
         {
             if (liftOffFlag[leg])
             {
                 footTarget = mapWFToB(Vector3d(feetStates[leg].x(sampleW), feetStates[leg].y(sampleW), 0.0));
-                footTargetW = gl.actual_base.x + gl.Rt*footTarget;
+                footTargetW = gl.actual_base.x  + gl.Rt*footTarget;
+                footTargetW(rbd::Z) = 0.02;
+                //correct with vision
+                float terrain_height;
+                bool visionAvailable = false;
+                visionAvailable = grid_map_terrain_->getHeight(footTargetW.head<2>(), terrain_height);
+                if (visionAvailable)
+                {
+                    footTargetW(rbd::Z) = terrain_height+0.02;
+                    footTarget = gl.R_sim * (footTargetW - actual_ws_->getBasePosition());
+                    prt(footTargetW)
+                }
+
                 //this is the delta step in the bse frame (concident with the swing frame for flat terrains)
                 //TODO generalize with a compute step strategy
                 Vector3d deltaFoot = footTarget - gl.footPos[leg];
@@ -389,7 +402,15 @@ void CrawlPlanner::run(double time,
                     footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, Vector3d(0,0,1), gl.footPosDes[leg],  gl.R, deltaFoot(rbd::X), deltaFoot(rbd::Y),  step_height);
 
                 } else {
-                    footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, deltaFoot(rbd::X), deltaFoot(rbd::Y),  step_height);
+                    //vision correction
+                    if (visionAvailable)
+                    {
+                        Vector3d W_Z_swingfr; //is in world frame
+                        stepHandler->computeSteplengthFromBasePointVision(swing_leg_index, footTarget,  gl.vec_incl[swing_leg_index] , step_x, step_y, W_Z_swingfr);
+                        footSpliner[swing_leg_index].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, W_Z_swingfr, gl.vec_incl[swing_leg_index], gl.footPos[leg],  gl.R, step_x, step_y, step_height);
+                    } else{
+                        footSpliner[leg].setSplineParameters(sampleTime,  horizon_duration/number_of_steps/2, gl.vec_incl[leg], gl.footPos[leg],  gl.R, deltaFoot(rbd::X), deltaFoot(rbd::Y),  step_height);
+                    }
                 }
                 gl.stance_legs[leg] = false;
                 std::cout<<"start swinging "<<legmap[leg]<<" leg"<<std::endl;
@@ -478,7 +499,6 @@ void CrawlPlanner::run(double time,
                                      "world");
             }
         }
-
         //draw the correction
         if (useComStepCorrection)
         {
@@ -490,10 +510,10 @@ void CrawlPlanner::run(double time,
         }
 
         //debug target
-//        display_->drawSphere(Vector3d(footTargetW(rbd::X),footTargetW(rbd::Y),0.02),
-//                             0.08,
-//                             dwl::Color(dwl::ColorType::Red,0.2),
-//                             "world");
+        display_->drawSphere(Vector3d(footTargetW(rbd::X),footTargetW(rbd::Y),footTargetW(rbd::Z)),
+                             0.08,
+                             dwl::Color(dwl::ColorType::Red,1.0),
+                             "world");
 
     }
     //finished crawl replanning
