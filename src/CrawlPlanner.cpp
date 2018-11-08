@@ -155,6 +155,8 @@ void CrawlPlanner::starting(double time) {
     des_com_yd.resize(horizon_size); des_com_xd.setZero();
     zmp_x.resize(horizon_size); zmp_x.setZero();
     zmp_y.resize(horizon_size); zmp_y.setZero();
+    centroidX.resize(horizon_size);centroidX.setZero();
+    centroidY.resize(horizon_size);centroidY.setZero();
 
     //set initial state for com and feet (replanning variables)
     actual_state_x(0) = gl.actual_CoM.x(rbd::X);
@@ -307,6 +309,7 @@ void CrawlPlanner::run(double time,
                                         A, b, *myPlanner,
                                         mySchedule->getCurrentSwing(),
                                         Vector2d(gl.actual_base.x(rbd::X),gl.actual_base.x(rbd::Y)));
+
                 dummy1 =  myPlanner->getDummyVars(1);
                 dummy2 =  myPlanner->getDummyVars(2);
             } else {
@@ -319,6 +322,9 @@ void CrawlPlanner::run(double time,
                                     A, b, *myPlanner,
                                     mySchedule->getCurrentSwing());
             }
+            //compute zmp reference form polygons
+            myPlanner->computeCentroid(feetStates, centroidX, centroidY);
+
             //print_foot_holds();
 
             //replan from the actual state and the new set of footholds overwriting the vector of jerk
@@ -327,8 +333,10 @@ void CrawlPlanner::run(double time,
                 myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,jerk_x,jerk_y);
             }
             else {//tries to achieve the userSpeed at the end of the replanning window
-                weight_R = 0.01; weight_Q = 1; myPlanner->setWeights(weight_R, weight_Q);
-                myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,userSpeed,jerk_x,jerk_y,replanningWindow);
+                weight_R = 0.01; weight_Q = 1; myPlanner->setWeights(weight_R, weight_Q, confidenceFactor);
+                myPlanner->solveQPConstraintCoupledRef(gl.actual_CoM_height,actual_state_x, actual_state_y , centroidX, centroidY, A,b,userSpeed,jerk_x,jerk_y,replanningWindow);
+                //this is wothout robustness
+                //myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,userSpeed,jerk_x,jerk_y,replanningWindow);
             }
             //for visualization purposes compute the whole trajectories from the jerk vector
             //com
@@ -987,7 +995,7 @@ void CrawlPlanner::interactiveChangeParams(void)
     std::cout << "Poor man's ICTP " << std::endl;
     std::cout << "8/2 to +/- linearSpeed X " << std::endl;
     std::cout << "4/6 to +/- linearSpeed Y " << std::endl;
-    std::cout << "o/l increase/decrease stepping frequency (needs toggleUseUserFreq) " << std::endl;
+    std::cout << "a/z increase/decrease confidence factor " << std::endl;
     std::cout << "q to exit" << std::endl;
 
     /* use system call to make terminal send all keystrokes directly to stdin */
@@ -1021,6 +1029,16 @@ void CrawlPlanner::interactiveChangeParams(void)
             if (linearSpeedX<-0.5)
                 linearSpeedX = -0.5;
             std::cout<<" linearSpeedX:"<< linearSpeedX<<std::endl<<std::endl;
+        }else if (user_text == "a"){
+            confidenceFactor+=10;
+            if (confidenceFactor>100)
+                confidenceFactor = 100;
+            std::cout<<" confidence factor:"<<confidenceFactor<<std::endl<<std::endl;
+        }else if (user_text == "z"){
+            confidenceFactor-=10;
+            if (confidenceFactor<0)
+                confidenceFactor = 0;
+            std::cout<<" confidence factor:"<< confidenceFactor<<std::endl<<std::endl;
         }else if(user_text == "q"){
             break;
         }else if(user_text == "Q"){

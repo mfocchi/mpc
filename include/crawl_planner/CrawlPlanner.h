@@ -132,10 +132,12 @@ protected:
     double task_time_resolution;
     double weight_R = 1e-06;
     double weight_Q = 1;
+    double confidenceFactor = 0.0;
 
     Eigen::VectorXd  jerk_x, jerk_y;
     Eigen::VectorXd  des_com_x, des_com_y;
     Eigen::VectorXd  des_com_xd, des_com_yd;
+    Eigen::VectorXd centroidX, centroidY;
     iit::commons::LinearSpliner interpolateCoMPositionX;
     iit::commons::LinearSpliner interpolateCoMPositionY;
     iit::commons::LinearSpliner interpolateCoMVelocityX;
