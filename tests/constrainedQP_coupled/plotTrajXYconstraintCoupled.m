@@ -108,8 +108,9 @@ close all
 VIDEO = false
 if VIDEO
     %video
-    aviobj = avifile('video.avi');%default mpeg
+    aviobj = VideoWriter('video.avi');%default mpeg
     aviobj.Quality = 100;    % Default 75
+    open(aviobj);
 end
 
 simfig = figure;
@@ -135,12 +136,12 @@ for i=1:length(time)
     subplot(3,1,1)
     h = plotPolygon(stance_vec);   
     hold on
+    h(length(h)+3) = plot(centroidX(i), centroidY(i),'.m','MarkerSize',60);
+    h(length(h)+2) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);    
     h(length(h)+1) = plot(com_x(i), com_y(i),'.g','MarkerSize',30);
-    h(length(h)+2) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);
+
     
-    h(length(h)+3) = plot(centroidX(i), centroidY(i),'.b','MarkerSize',40);
-    
-    legend([h(length(h)+1) h(length(h)+2)], 'zmp', 'com','location', 'West')
+    legend([h(length(h)+1) h(length(h)+2) h(length(h)+3)], 'zmp', 'com','centroid','location', 'West')
     xlim([-1 ,2])
     ylim([-1.1 ,2.0])
     
@@ -149,32 +150,34 @@ for i=1:length(time)
     subplot(3,1,2)
     plot(time(i), viol(i),'.b','MarkerSize',20); hold on; grid on;
     xlim([0, time(end)])
-    ylim([-1,1])
+    ylim([0,1])
     ylabel('constr.viol')
     
-        subplot(3,1,3)
-    plot(time(i), avg_slacks(i),'.r','MarkerSize',20); hold on; grid on;
-      plot(time(i), min_slacks(i),'.b','MarkerSize',20); hold on; grid on;
-    xlim([0, time(end)])
- legend('avg slack','min slack')
-    ylabel('slacks')
-    
-%     subplot(3,1,3)
-%     plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
-%     plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
-%     plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
-%     plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
+%        subplot(3,1,3)
+%     plot(time(i), avg_slacks(i),'.r','MarkerSize',20); hold on; grid on;
+%       plot(time(i), min_slacks(i),'.b','MarkerSize',20); hold on; grid on;
 %     xlim([0, time(end)])
-%     ylim([0,1.1])
-%     ylabel('swing leg')
-%        legend('LF','RF','LH','RH')
-    pause(0.001+ 1/time)
+%     legend('avg slack','min slack')
+%     ylabel('slacks')
+    
+     subplot(3,1,3)
+     plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
+     plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
+     plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
+     plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
+     xlim([0, time(end)])
+     ylim([0,1.1])
+     ylabel('swing leg')
+     legend('LF','RF','LH','RH')
+     
+     
+    pause(0.01+ 1/time)
     drawnow
     
     if VIDEO
         set (gcf,'Units','Normalized','outerposition',[0 0 1 1]); %do full screen window
         frame = getframe(gcf);
-        aviobj = addframe(aviobj,frame);
+        writeVideo(aviobj,frame);
     end
     delete(h); %this deletes the handle
 
