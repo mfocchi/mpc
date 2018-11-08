@@ -625,6 +625,161 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 }
 
 
+//2 D - using polygon constraints with velocity optimization, set R for jerk and Q for velocity, and Qref for zmp ref
+void MPCPlanner::solveQPConstraintCoupledRef(const double actual_height,
+                                          const Eigen::Vector3d & initial_state_x,
+                                          const Eigen::Vector3d & initial_state_y,
+                                          const VectorXd & zmp_ref_x,
+                                          const VectorXd & zmp_ref_y,
+                                          const  MatrixXd & A,  const  VectorXd & b,
+                                          const Eigen::Vector2d &targetSpeed,
+                                          Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y, int replanningWindow)
+{
+
+
+    this->height_ = actual_height;
+    Eigen::MatrixXd GQ, CI, CE, Zuc, Zxc, Zyc; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0, solution;
+    //build matrix
+    GQ.resize(2*horizon_size_,2*horizon_size_);
+    g0.resize(2*horizon_size_,1);
+    solution.resize(2*horizon_size_);
+
+    CI.resize(b.size(),2*horizon_size_); //max /min for all horizon
+    ci0.resize(b.size());
+
+    jerk_vector_x.resize(horizon_size_);
+    jerk_vector_y.resize(horizon_size_);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+
+    //Finds x that minimizes xddd^T * Q * xddd where xddd = [xddd_x, xddd_y]
+    g0.setZero();
+
+    //add the jerk term
+    Eigen::MatrixXd Gjerk;
+    Gjerk.resize(2*horizon_size_,2*horizon_size_);
+    Gjerk.setIdentity();
+    Gjerk*=weight_R;
+
+
+    //add the velocity term (set a constraint only on the last value of velocity
+    int window = horizon_size_;//horizon_size_ //is the window where you enforce the velocity is good to set the whole horizon otherwise you have discontinuities
+    buildMatrix(Cv,Xvx,Xvu);
+    MatrixXd weightQv, Gv;
+    weightQv.resize(horizon_size_,horizon_size_);
+    if (replanningWindow ==1000)
+    {
+        //this tries to achieve the desired speed at the end of the horizon
+        //prt("usig constant  weighting")
+        weightQv.setIdentity();
+        weightQv  *= weight_Q*horizon_size_/window;//scale the importance with window size to make trhe costs comparable
+    } else{
+        //this tries to achieve the desired speed at the end of the replanning window
+        //prt("usig importance weighting")
+        //importance weight, make gaussian wise most important the weights at the end of the replanning window
+        weightQv = makeGaussian(horizon_size_, replanningWindow, replanningWindow).asDiagonal();
+        weightQv  *= weight_Q*horizon_size_; //to use the same weights cause the gaussian  integral is 1 and not horizon_size (e.g. as it would be as we have all ones)
+    }
+
+    VectorXd selectionVector;
+    MatrixXd selectionMatrix;
+    selectionVector.resize(horizon_size_);
+    selectionVector.setZero();
+    selectionVector.segment(horizon_size_-window, window) = VectorXd::Ones(window);
+    selectionMatrix.resize(horizon_size_,horizon_size_);
+    selectionMatrix = selectionVector.asDiagonal();
+    Gv.resize(2*horizon_size_,2*horizon_size_);Gv.setZero();
+    //to select from a matrix I need to left and right multiply for the selection matrix
+    Gv.block(0,0,horizon_size_,horizon_size_) = selectionMatrix* Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    Gv.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = selectionMatrix * Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    //prt(Gv)
+
+    Eigen::VectorXd bx, by, desiredSpeedVector,gv;
+    desiredSpeedVector.resize(horizon_size_);
+    bx.resize(horizon_size_);
+    by.resize(horizon_size_);
+    bx = Xvx*initial_state_x - desiredSpeedVector.setConstant(targetSpeed(rbd::X));
+    by = Xvx*initial_state_y - desiredSpeedVector.setConstant(targetSpeed(rbd::Y));
+    gv.resize(2*horizon_size_,1);gv.setZero();
+    //to select from a row vector I need to right multiply for the selection matrix
+    gv.segment(0,horizon_size_) = bx.transpose()*weightQv*Xvu*selectionMatrix;
+    gv.segment(horizon_size_,horizon_size_) = by.transpose()*weightQv*Xvu*selectionMatrix;
+    //prt(gv.transpose())
+
+    //add accel term (the weight is the same as R)
+    //add the velocity term (set a constraint only on the last value of velocity
+    buildMatrix(Ca,Xax,Xau);
+    MatrixXd  Ga;
+    Ga.resize(2*horizon_size_,2*horizon_size_);Ga.setZero();
+    Ga.block(0,0,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+    Ga.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+
+    //reference zmp cost
+    MatrixXd  Gref;
+    Eigen::VectorXd gref;
+    Gref.resize(2*horizon_size_,2*horizon_size_);Gref.setZero();
+    //Zuc is block diagonal
+    Gref.block(0,0, horizon_size_, horizon_size_) = Zu.transpose()*weight_Qs*Zu;
+    Gref.block(horizon_size_,horizon_size_, horizon_size_, horizon_size_) = Zu.transpose()*weight_Qs*Zu;
+    gref.resize(2*horizon_size_,1);gref.setZero();
+    bx = Zx*initial_state_x - zmp_ref_x;
+    by = Zx*initial_state_y - zmp_ref_y;
+    //to select from a row vector I need to right multiply for the selection matrix
+    gref.segment(0,horizon_size_) = bx.transpose()*weight_Qs*Zu;
+    gref.segment(horizon_size_,horizon_size_) = by.transpose()*weight_Qs*Zu;
+////////////
+
+
+    GQ = Gjerk + Gv + Gref;// + Ga; //Ga does not make difference
+    g0 = gv + gref; //gjerk ga are zero cause we want to just miniminze their norm
+
+    ///////////////////////////////////////////////////
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //inequalities
+    //Zuc is block diagonal
+    Zuc.resize(2*horizon_size_,2*horizon_size_); Zuc.setZero();
+    Zuc.block(0,0,horizon_size_,horizon_size_) = Zu;
+    Zuc.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Zu;
+
+//    //Zxc, Zyc are columns
+    Zxc.resize(2*horizon_size_,3);Zxc.setZero();
+    Zxc.block(0,0,horizon_size_,3) = Zx;
+    Zyc.resize(2*horizon_size_,3);Zyc.setZero();
+    Zyc.block(horizon_size_,0,horizon_size_,3) = Zx;
+//
+
+    CI = A*Zuc;
+    ci0 = b + A*(Zxc*initial_state_x + Zyc*initial_state_y);
+
+
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+    else {
+        //prt(solution.transpose())
+        jerk_vector_x = solution.segment(0,horizon_size_);
+        jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
+    }
+    //costs
+    if (debug_mode)
+    {
+        std::cout<<"jerk cost Cj: "<<0.5*solution.transpose()*Gjerk*solution <<std::endl;
+        std::cout<<"acc cost Ca: "<<0.5*solution.transpose()*Ga*solution <<std::endl ;
+        std::cout<<"vel cost Cv: "<<0.5*solution.transpose()*Gv*solution + gv.transpose()*solution<<std::endl;
+    }
+    //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
+
+    all_violations_ =CI*solution + ci0;
+    //prt((CI*solution + ci0).transpose())
+
+}
+
+
 //2 D - using polygon constraints with velocity optimization, set R for jerk and Q for velocity, with slacks for zmp robustness (e.g. stay away from the polygon)
 void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
                                           const Eigen::Vector3d & initial_state_x,

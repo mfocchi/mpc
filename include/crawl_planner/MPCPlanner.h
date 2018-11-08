@@ -90,6 +90,18 @@ class MPCPlanner
                                       Eigen::VectorXd & jerk_vector_y,
                                       int replanningWindow = 1000);
 
+        void solveQPConstraintCoupledRef(const double actual_height,
+                                                  const Eigen::Vector3d & initial_state_x,
+                                                  const Eigen::Vector3d & initial_state_y,
+                                                  const Eigen::VectorXd & zmp_ref_x,
+                                                  const Eigen::VectorXd & zmp_ref_y,
+                                                  const Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,
+                                                  const Eigen::Vector2d &targetSpeed,
+                                                  Eigen::VectorXd & jerk_vector_x,
+                                                  Eigen::VectorXd & jerk_vector_y,
+                                                  int replanningWindow = 1000);
+
+        //this function doe not work, is deprecated, I leave it here cause the implementation can be useful in the future
         void solveQPConstraintCoupledSlacks(const double actual_height,
                                                   const Eigen::Vector3d & initial_state_x,
                                                   const Eigen::Vector3d & initial_state_y,
