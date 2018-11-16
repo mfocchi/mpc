@@ -62,3 +62,8 @@ set_target_properties(testPlannerXYconstraintCoupled PROPERTIES COMPILE_FLAGS "-
 add_executable(testPlannerXYconstraintMPC tests/replanning/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
 target_link_libraries(testPlannerXYconstraintMPC   ${catkin_LIBRARIES})
 set_target_properties(testPlannerXYconstraintMPC PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/replanning")
+
+add_executable(generateFootSteps tests/niraj/generateFootSteps.cpp src/MPCPlanner.cpp)
+target_link_libraries(generateFootSteps   ${catkin_LIBRARIES})
+set_target_properties(generateFootSteps PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/niraj")
+
