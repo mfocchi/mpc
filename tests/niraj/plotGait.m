@@ -16,7 +16,7 @@ swing=[];
 [time,swing(2,:)] = textread('swingRF.txt', format_input);
 [time,swing(3,:)] = textread('swingLH.txt', format_input);
 [time,swing(4,:)] = textread('swingRH.txt', format_input);
-
+[time,strideparam] = textread('strideparam.txt', format_input);
 
 %%
 addpath('../')
@@ -37,6 +37,12 @@ plot(time  , footPos_x(1,:),'-bo' );hold on;grid on
 plot(time  , footPos_x(2,:),'-ro' )
 plot(time  , footPos_x(3,:),'-ko' )
 plot(time  , footPos_x(4,:),'-mo' )
+legend('LF','RF','LH','RH')
+figure 
+plot(time  , footPos_y(1,:),'-bo' );hold on;grid on
+plot(time  , footPos_y(2,:),'-ro' )
+plot(time  , footPos_y(3,:),'-ko' )
+plot(time  , footPos_y(4,:),'-mo' )
 legend('LF','RF','LH','RH')
 
 
@@ -59,10 +65,10 @@ for i=1:length(time)
     
     
     subplot(2,1,1)
-    h = plotPolygon(stance_vec);   
+    h = plotPolygonNiraj(stance_vec);   
     hold on
     xlim([-1 ,2])
-    ylim([-1.1 ,2.0])
+    ylim([-1.1 ,1.0])
             
      subplot(2,1,2)
      plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
@@ -75,7 +81,7 @@ for i=1:length(time)
      legend('LF','RF','LH','RH')
      
      
-    pause(0.01+ 1/time)
+    pause(0.001+ 1/time)
     drawnow  
 
     delete(h); %this deletes the handle

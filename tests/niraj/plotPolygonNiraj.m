@@ -20,7 +20,8 @@ function  h = plotPolygon(stance_vec)
             edge{3} = stance_vec{1}-stance_vec{3}; edge_start{3} = stance_vec{3};
 
         end
-    
+        
+        %plot edges
 
         for i=1:stance_count
                 grid on 
@@ -28,10 +29,20 @@ function  h = plotPolygon(stance_vec)
                 h(i,:) = arrow3(edge_start{i},edge{i},'k'  ); %tail at stance_vec1 magnitude  stance_vec2(i,:)-stance_vec1(i,:)
                 xlabel('X')
                 ylabel('Y')
-                h(i+1) = plot(edge_start{i}(1),stance_vec{1}(2), '.b', 'MarkerSize',40)
-
+               
                 %axis equal
         end   
+        %plot feet
+       for i=1:stance_count
+                grid on 
+                hold on
+                h(stance_count+i,:) = plot(edge_start{i}(1),edge_start{i}(2), '.b', 'MarkerSize',40);
+                xlabel('X')
+                ylabel('Y')
+               
+                %axis equal
+        end  
+         
     end
 end
 

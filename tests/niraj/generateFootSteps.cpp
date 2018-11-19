@@ -1,6 +1,7 @@
 
 
 #include <crawl_planner/MPCPlanner.h>
+#include <crawl_planner/GaitSequencer.h>
 #include <dls_controller/support/ConsoleUtility.h>
 #include <stdlib.h>
 #include <crawl_controller/GaitSequencer.h>
@@ -17,7 +18,7 @@ double stridePhase;
 iit::dog::LegBoolMap swingingFlag = false; //stores the time of the steps
 iit::dog::LegBoolMap gait_swing_status = false;
 bool detected_switch = false;
-double duty_factor = 0.75;
+double duty_factor = 0.85;
 //init params
 int horizon_size = 200;//10 default for tests
 double Ts = 0.1;
@@ -28,6 +29,7 @@ LegDataMap<MPCPlanner::footState> footHolds;
 LegDataMap<double> feetValuesX, feetValuesY;
 LegDataMap<double> initial_feet_x;
 LegDataMap<double> initial_feet_y;
+VectorXd strideparam;
 
 int main()
 {
@@ -42,7 +44,7 @@ newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
 //init stuff
 //sequence of legs in the cycle
-myGaitSchedule.setSequence(iit::dog::RF, iit::dog::LH, iit::dog::LF, iit::dog::RH);
+myGaitSchedule.setSequence(iit::dog::RH, iit::dog::RF, iit::dog::LH, iit::dog::LF);
 myGaitSchedule.setTaskServoRate(1/Ts);
 //set duty factors for each leg
 myGaitSchedule.setDutyFactor(duty_factor, duty_factor, duty_factor, duty_factor);
@@ -50,7 +52,7 @@ myGaitSchedule.setDutyFactor(duty_factor, duty_factor, duty_factor, duty_factor)
 myGaitSchedule.setOffsetAboutCycleStart(0.0  ,0.25  , 0.5 , 0.75 ); //TODO fix this it does not reset
 //set cycle duration
 myGaitSchedule.setTotalCycleDuration(cycle_time); //cycle time is only for 1 step!
-
+strideparam.resize(horizon_size);
 
 //initial feet position
 feetValuesX[LF] = 0.3;
@@ -83,26 +85,27 @@ for (int i = 0; i < horizon_size; i++)
     feetStates[LH].y[i] = feetValuesY[LH];
     feetStates[RH].y[i] = feetValuesY[RH];
 
-    feetStates[LF].swing[i] = swingingFlag[LF];
-    feetStates[RF].swing[i] = swingingFlag[RF];
-    feetStates[LH].swing[i] = swingingFlag[LH];
-    feetStates[RH].swing[i] = swingingFlag[RH];
-    //advance step
-//    if (detected_switch)
-//    {
-//        for (int leg=LF; leg<=RH;leg++)
-//        {
-//            if (swingingFlag[leg])
-//            {
-//                feetValuesX[leg] += userSpeed(0);
-//                feetValuesY[leg] += userSpeed(1);
-//            }
-//        }
-//        detected_switch = false;
-//    }
-
-    stridePhase = myGaitSchedule.getStrideParametrization(); //this is for debug
     gait_swing_status = myGaitSchedule.getSwingLegState();
+    feetStates[LF].swing[i] = gait_swing_status[LF];
+    feetStates[RF].swing[i] = gait_swing_status[RF];
+    feetStates[LH].swing[i] = gait_swing_status[LH];
+    feetStates[RH].swing[i] = gait_swing_status[RH];
+    //advance step
+    if (detected_switch)
+    {
+        for (int leg=LF; leg<=RH;leg++)
+        {
+            if (gait_swing_status[leg])
+            {
+                feetValuesX[leg] += userSpeed(0);
+                feetValuesY[leg] += userSpeed(1);
+            }
+        }
+        detected_switch = false;
+    }
+
+    strideparam[i] = myGaitSchedule.getStrideParametrization(); //this is for debug
+
 }
 //myPlanner.computeSteps(userSpeed, initial_feet_x, initial_feet_y, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,iit::dog::LF);
 
@@ -116,6 +119,7 @@ myPlanner.saveTraj("swingLF.txt",  feetStates[LF].swing);
 myPlanner.saveTraj("swingRF.txt",  feetStates[RF].swing);
 myPlanner.saveTraj("swingLH.txt",  feetStates[LH].swing);
 myPlanner.saveTraj("swingRH.txt",  feetStates[RH].swing);
+myPlanner.saveTraj("strideparam.txt",  strideparam);
 
 }
 
