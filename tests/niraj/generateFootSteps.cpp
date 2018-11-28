@@ -1,7 +1,6 @@
 
 
 #include <crawl_planner/MPCPlanner.h>
-#include <crawl_planner/GaitSequencer.h>
 #include <dls_controller/support/ConsoleUtility.h>
 #include <stdlib.h>
 #include <crawl_controller/GaitSequencer.h>
