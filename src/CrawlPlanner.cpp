@@ -95,8 +95,8 @@ void CrawlPlanner::starting(double time) {
     tau_max_ = robot_limits_->getTorqueLimits(q_);
 
     //init gl
-    gl.init(q_, qd_, qdd_); //this sets also 	footPosDes = footPos;
-    gl.sl_to_eigenLogic(q_, qd_, tau_, tau_max_, qdd_, *bs);
+    gl.init(q_, qd_,feet_jacs_,fwd_kin_, qdd_); //this sets also 	footPosDes = footPos;
+    gl.update_states(q_, qd_, tau_, tau_max_,qdd_, *bs);
     //this is needed to compute qdd_ via numeric differentiation
     gl.setServoRate(planning_rate_);
 
@@ -233,8 +233,7 @@ void CrawlPlanner::run(double time,
     bs->setRotationRate_B(actual_ws_->getBaseAngularVelocity_W());
     bs->setRotAcceleration_B(actual_ws_->getBaseAngularAcceleration_W());
     bs->setOrientation_W(actual_ws_->getBaseOrientation());
-    gl.sl_to_eigenLogic(q_, qd_, tau_,tau_max_, qdd_, *bs);
-
+    gl.update_states(q_, qd_, tau_, tau_max_,qdd_, *bs);
     //compute terrain estimation
     if (Terrain_Estimation){
         computeTerrainEstimation();
@@ -631,8 +630,6 @@ void CrawlPlanner::setRobotModels(std::shared_ptr<iit::dog::FeetJacobians>& feet
                                feet_forces);
 
     // setting the God Object
-    gl.feet_jacobians_ = feet_jacs;
-    gl.fwd_kin_ = fwd_kin;
     gl.linksInertia = inertia_props;
     gl.homogeneousTransforms = hom_transforms;
     gl.jsim = jsim;
@@ -854,10 +851,10 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
 bool CrawlPlanner::check_touch_down()
 {
     iit::dog::LegDataMap<FootJac > JFootDes;
-    JFootDes[LF] = gl.feet_jacobians_->getFootJacobian(des_q_,LF);
-    JFootDes[RF] = gl.feet_jacobians_->getFootJacobian(des_q_,RF);
-    JFootDes[LH] = gl.feet_jacobians_->getFootJacobian(des_q_,LH);
-    JFootDes[RH] = gl.feet_jacobians_->getFootJacobian(des_q_,RH);
+    JFootDes[LF] = feet_jacs_->getFootJacobian(des_q_,LF);
+    JFootDes[RF] = feet_jacs_->getFootJacobian(des_q_,RF);
+    JFootDes[LH] = feet_jacs_->getFootJacobian(des_q_,LH);
+    JFootDes[RH] = feet_jacs_->getFootJacobian(des_q_,RH);
 
     double sigma_ws_limit;
     sigma_ws_limit = 0.009; //this is good also for hyqreal
