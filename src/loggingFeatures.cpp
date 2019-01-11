@@ -274,19 +274,6 @@ addVarToCollect(gl.footPosDes[iit::dog::RF](X),"footPosDesRFx");
 addVarToCollect(gl.footPosDes[iit::dog::RF](Y),"footPosDesRFy");
 addVarToCollect(gl.footPosDes[iit::dog::RF](Z),"footPosDesRFz");
 
-addVarToCollect(gl.footPosDesCorrected[iit::dog::LF](X),"footPosDesCorrLFx");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::LF](Y),"footPosDesCorrLFy");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::LF](Z),"footPosDesCorrLFz");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::LH](X),"footPosDesCorrLHx");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::LH](Y),"footPosDesCorrLHy");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::LH](Z),"footPosDesCorrLHz");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::RH](X),"footPosDesCorrRHx");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::RH](Y),"footPosDesCorrRHy");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::RH](Z),"footPosDesCorrRHz");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::RF](X),"footPosDesCorrRFx");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::RF](Y),"footPosDesCorrRFy");
-addVarToCollect(gl.footPosDesCorrected[iit::dog::RF](Z),"footPosDesCorrRFz");
-
 addVarToCollect(gl.footVelDes[iit::dog::LF](X),"footVelDesLFx");
 addVarToCollect(gl.footVelDes[iit::dog::LF](Y),"footVelDesLFy");
 addVarToCollect(gl.footVelDes[iit::dog::LF](Z),"footVelDesLFz");

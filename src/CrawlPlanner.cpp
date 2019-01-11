@@ -138,9 +138,8 @@ void CrawlPlanner::starting(double time) {
     gl.cycle_time = gl.config_.get<double>("Crawl.cycle_time");
     update_phase_duration(gl.cycle_time);
     stepHandler->setSpeedParameters(0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.022, 0.022, 0.022);
-    stepHandler->setHipDefaultYOffset(0.06 + fabs((gl.footPos[iit::dog::LF] - stepHandler->getHipPosition(q_,iit::dog::LF))(rbd::Y)));
-    stepHandler->setDefaultStepLength((linearSpeedX * gl.cycle_time));
-    des_q_ = q_;
+    stepHandler->setHipDefaultYOffset(0.06 + fabs((gl.footPos[iit::dog::LF] - stepHandler->getHipPosition(iit::dog::LF))(rbd::Y)));
+     des_q_ = q_;
     des_qd_.setZero();
 
     //init replanning stuff
@@ -731,7 +730,7 @@ void CrawlPlanner::crawlStateMachine(double time)
                 std::cout <<"swing leg "<<legmap[swing_leg_index]<<std::endl;
                 step_x = 0.0;
                 step_y = 0.0;
-                stepHandler->computeStepLength(q_, swing_leg_index,  gl.footPos, linearSpeedX, linearSpeedY, headingSpeed, step_x, step_y); //compute the step length in the base frame and updates the cycle duration
+                stepHandler->computeStepLength(swing_leg_index,  gl.footPos, linearSpeedX, linearSpeedY, headingSpeed, step_x, step_y); //compute the step length in the base frame and updates the cycle duration
                 footSpliner[swing_leg_index].setSplineParameters(time,  swing_motion_duration, gl.vec_incl[swing_leg_index], gl.footPosDes[swing_leg_index],  gl.R, step_x, step_y, step_height);
 	            swingTimer.startTimer(time);
 	        }
