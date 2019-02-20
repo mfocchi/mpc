@@ -665,8 +665,6 @@ void CrawlPlanner::crawlStateMachine(double time)
                 bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal, stab_margin, new_triangle_baryW);
                 //for plotting purposes
 	            BaryTriangleW= gl.actual_base.x + new_triangle_baryW;
-	            gl.dummy_var1 = gl.actual_base.x +bodyTargetHandler->getDummyVar();
-	            gl.dummy_var2 = gl.actual_base.x +new_triangle_baryW;
 
 	            //alternative  WAY (TODO)
 	            //prt(new_triangle_baryW)
