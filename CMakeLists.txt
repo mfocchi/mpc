@@ -75,6 +75,7 @@ if (CATKIN_ENABLE_TESTING)
     install(TARGETS testPlannerXYconstraintDecoupled RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/constrainedQP_decoupled/)
     install(TARGETS testPlannerXYconstraintCoupled RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/constrainedQP_coupled/)
     install(TARGETS testPlannerXYconstraintMPC RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/replanning/)
+    install(TARGETS generateFootSteps RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/niraj/)
 
 endif()
 
