@@ -1,6 +1,10 @@
 close all
 clear all
 format = '%f  %f'
+
+addpath('../../../../../../install/share/crawl_planner/tests/unconstrainedQP_XY')
+addpath('../')
+
 [time,zmpRefx] = textread('zmpRef_x.txt', format);
 [time,zmpRefy] = textread('zmpRef_y.txt', format);
 [time,jerk_x] = textread('jerk_x.txt', format);

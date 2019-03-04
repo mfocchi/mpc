@@ -5,11 +5,24 @@ format short g
 format_input = '%f  %f';
 format_input2 = '%f  %f %f';
 
+
+
+addpath('../../../../../../install/share/crawl_planner/tests/niraj')
     
 [time,   footPos_x(1,:),footPos_y(1,:)] = textread('footPosLF.txt', format_input2);
 [time,   footPos_x(2,:),footPos_y(2,:)] = textread('footPosRF.txt', format_input2);
 [time,   footPos_x(3,:),footPos_y(3,:)] = textread('footPosLH.txt', format_input2);
 [time,   footPos_x(4,:),footPos_y(4,:)] = textread('footPosRH.txt', format_input2);
+
+[time,grForcesZ(1,:)] = textread('grForcesLF_Z.txt', format_input);
+[time,grForcesZ(2,:)] = textread('grForcesRF_Z.txt', format_input);
+[time,grForcesZ(3,:)] = textread('grForcesLH_Z.txt', format_input);
+[time,grForcesZ(4,:)] = textread('grForcesRH_Z.txt', format_input);
+
+
+[time,   basePosition_x(1,:),basePosition_y(1,:)] = textread('basePosition.txt', format_input2);
+[time,   baseVelocity_x(1,:),baseVelocity_y(1,:)] = textread('baseVelocity.txt', format_input2);
+
 
 swing=[];
 [time,swing(1,:)] = textread('swingLF.txt', format_input);
@@ -19,7 +32,7 @@ swing=[];
 [time,strideparam] = textread('strideparam.txt', format_input);
 
 %%
-addpath('../')
+
 
 %%
 %STATIC PLOT
@@ -31,7 +44,7 @@ plot(time  , swing(4,:),'-mo' )
 legend('LF','RF','LH','RH')
 
 %%
-
+%plot foot positions
 figure 
 plot(time  , footPos_x(1,:),'-bo' );hold on;grid on
 plot(time  , footPos_x(2,:),'-ro' )
@@ -45,11 +58,17 @@ plot(time  , footPos_y(3,:),'-ko' )
 plot(time  , footPos_y(4,:),'-mo' )
 legend('LF','RF','LH','RH')
 
+%plot grforces
+figure
+plot(time  , grForcesZ(1,:),'-bo' );hold on;grid on
+plot(time  , grForcesZ(2,:),'-ro' )
+plot(time  , grForcesZ(3,:),'-ko' )
+plot(time  , grForcesZ(4,:),'-mo' )
+legend('LF','RF','LH','RH')
 
 
 %%
 close all
-
 simfig = figure;
 
 
@@ -69,27 +88,31 @@ for i=1:length(time)
     hold on
     xlim([-1 ,2])
     ylim([-1.1 ,1.0])
-            
-     subplot(2,1,2)
+    %plot base pos
+    com = plot(basePosition_x(i), basePosition_y,'.r','MarkerSize',40);
+    
+    
+    subplot(2,1,2)
      plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
      plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
      plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
      plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
+     
+     
+     
      xlim([0, time(end)])
      ylim([0,1.1])
      ylabel('swing leg')
      legend('LF','RF','LH','RH')
      
      
-    pause(0.001+ 1/time)
+    %pause(0.001+ 1/time)
     drawnow  
 
     delete(h); %this deletes the handle
+    delete(com);
 
                   
 end   
    
-if VIDEO
-    aviobj = close(aviobj)
-end
 

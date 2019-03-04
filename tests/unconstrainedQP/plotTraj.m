@@ -6,7 +6,8 @@ format = '%f  %f'
 [time,jerk] = textread('jerk.txt', format);
 [time,com] = textread('com.txt', format);
 
-
+addpath('../../../../../../install/share/crawl_planner/tests/unconstrainedQP')
+addpath('../')
 run('../loadFigOptions.m')
 
 %NB trajectory starts from the second value
