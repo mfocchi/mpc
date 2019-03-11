@@ -20,8 +20,8 @@ addpath('../../../../../../install/share/crawl_planner/tests/niraj')
 [time,grForcesZ(4,:)] = textread('grForcesRH_Z.txt', format_input);
 
 
-[time,   basePosition_x(1,:),basePosition_y(1,:)] = textread('basePosition.txt', format_input2);
-[time,   baseVelocity_x(1,:),baseVelocity_y(1,:)] = textread('baseVelocity.txt', format_input2);
+[time,   des_target_posX(1,:),des_target_posY(1,:)] = textread('basePosition.txt', format_input2);
+[time,   des_target_posXd(1,:),des_target_posYd(1,:)] = textread('baseVelocity.txt', format_input2);
 
 
 swing=[];
@@ -31,17 +31,22 @@ swing=[];
 [time,swing(4,:)] = textread('swingRH.txt', format_input);
 [time,strideparam] = textread('strideparam.txt', format_input);
 
-%%
+%fill in remaining values
+grForcesX = zeros(4, length(time));
+grForcesY = zeros(4, length(time));
+des_target_posZ = 0.55*ones(1, length(time));
+footPos_z = zeros(4, length(time));
 
-
-%%
 %STATIC PLOT
 figure 
-plot(time  , swing(1,:),'-bo' );hold on;grid on
-plot(time  , swing(2,:),'-ro' )
-plot(time  , swing(3,:),'-ko' )
+plot(time  , swing(1,:)*0.25,'-bo' );hold on;grid on
+plot(time  , swing(2,:)*0.5,'-ro' )
+plot(time  , swing(3,:)*0.75,'-ko' )
 plot(time  , swing(4,:),'-mo' )
 legend('LF','RF','LH','RH')
+
+
+
 
 %%
 %plot foot positions
@@ -66,8 +71,11 @@ plot(time  , grForcesZ(3,:),'-ko' )
 plot(time  , grForcesZ(4,:),'-mo' )
 legend('LF','RF','LH','RH')
 
+figure
+plot(time,  des_target_posX(1,:))
+plot(time,  des_target_posY(1,:))
 
-%%
+%
 close all
 simfig = figure;
 
@@ -75,6 +83,9 @@ simfig = figure;
 for i=1:length(time)
     stance_vec = {}; 
     stance_count = 0;
+    % this avoids a bit the slow down due to hold on
+    cla
+    
     for leg=1:4
         if ~swing(leg,i)
             stance_count = stance_count +1;
@@ -84,31 +95,35 @@ for i=1:length(time)
     
     
     subplot(2,1,1)
+        
+    com = plot(des_target_posX(i), des_target_posY(i),'.r','MarkerSize',40);
+    hold on;
+    
     h = plotPolygonNiraj(stance_vec);   
+    
     hold on
     xlim([-1 ,2])
     ylim([-1.1 ,1.0])
     %plot base pos
-    com = plot(basePosition_x(i), basePosition_y,'.r','MarkerSize',40);
-    
-    
+   
     subplot(2,1,2)
-     plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
-     plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
-     plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
-     plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
-     
-     
-     
-     xlim([0, time(end)])
-     ylim([0,1.1])
-     ylabel('swing leg')
-     legend('LF','RF','LH','RH')
-     
-     
-    %pause(0.001+ 1/time)
-    drawnow  
+    hold on;
+    %plot only when 1
+    plot(time(1:i), swing(1,1:i)*0.25,'.b','MarkerSize',20); grid on; 
+    plot(time(1:i), swing(2,1:i)*0.5,'.r','MarkerSize',20); grid on;
+    plot(time(1:i), swing(3,1:i)*0.75,'.k','MarkerSize',20); grid on;
+    plot(time(1:i), swing(4,1:i),'.m','MarkerSize',20); grid on;
+    
+    
+    xlim([0, time(end)])
+    ylim([0.01,1.1])
+    ylabel('swing leg')
+    legend('LF','RF','LH','RH')
 
+    %
+    set(gcf, 'renderer', 'painters')
+    drawnow   limitrate
+   
     delete(h); %this deletes the handle
     delete(com);
 

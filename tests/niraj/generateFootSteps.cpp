@@ -20,7 +20,7 @@ bool detected_switch = false;
 double duty_factor = 0.85;
 //init params
 int horizon_size = 200;//10 default for tests
-double Ts = 0.1;
+double Ts = 0.04;
 double cycle_time = 4.0;
 double robotMass = 86.6;
 Vector2d userSpeed;
@@ -47,19 +47,60 @@ newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
 
 initialBasePos << 0.0,0.0;
+
 newline::getDouble("initial Base position X:", initialBasePos(0), initialBasePos(0));
 newline::getDouble("initial Base position Y:", initialBasePos(1), initialBasePos(1));
 
 newline::getDouble("total robot mass:",robotMass, robotMass);
 
-//init stuff
-//sequence of legs in the cycle
-myGaitSchedule.setSequence(iit::dog::RH, iit::dog::RF, iit::dog::LH, iit::dog::LF);
 myGaitSchedule.setTaskServoRate(1/Ts);
+LegDataMap<double> offset_gait;
+int gaitType = 0;
+newline::getInt("gait [0] crawl, [1] pace,[2] trot, [3]bounding: ",gaitType, gaitType);
+
+switch (gaitType)
+{
+case 0:{
+    //crawl
+    myGaitSchedule.setSequence(iit::dog::RH, iit::dog::RF, iit::dog::LH, iit::dog::LF);
+    newline::getDouble("offset1:", 0.0, offset_gait[0]);
+    newline::getDouble("offset2:", 0.25, offset_gait[1]);
+    newline::getDouble("offset3:", 0.5, offset_gait[2]);
+    newline::getDouble("offset4:", 0.75, offset_gait[3]);
+    break;}
+case 1:{
+    //pace
+    myGaitSchedule.setSequence(iit::dog::RH, iit::dog::RF, iit::dog::LH, iit::dog::LF);
+    offset_gait[0] = 0.0;
+    offset_gait[1] = 0.0;
+    offset_gait[2] = 0.5;
+    offset_gait[3] = 0.5;
+    break;}
+case 2:{
+    //trot
+    myGaitSchedule.setSequence(iit::dog::RH, iit::dog::LF, iit::dog::LH, iit::dog::RF);
+    offset_gait[0] = 0.0;
+    offset_gait[1] = 0.0;
+    offset_gait[2] = 0.5;
+    offset_gait[3] = 0.5;
+    break;}
+case 3:{
+    //bound
+    myGaitSchedule.setSequence(iit::dog::RH, iit::dog::LH, iit::dog::RF, iit::dog::LF);
+    offset_gait[0] = 0.0;
+    offset_gait[1] = 0.0;
+    offset_gait[2] = 0.5;
+    offset_gait[3] = 0.5;
+    break;}
+default:
+    break;
+}
+
+newline::getDouble("duty Factor (crawl has 2 stance phase below 0.75, trot pace have flight below  0.5):", duty_factor, duty_factor);
 //set duty factors for each leg
 myGaitSchedule.setDutyFactor(duty_factor, duty_factor, duty_factor, duty_factor);
 //set offsets
-myGaitSchedule.setOffsetAboutCycleStart(0.0  ,0.25  , 0.5 , 0.75 ); //TODO fix this it does not reset
+myGaitSchedule.setOffsetAboutCycleStart(offset_gait[0]  ,offset_gait[1]  , offset_gait[2] , offset_gait[3] ); //TODO fix this it does not reset
 //set cycle duration
 myGaitSchedule.setTotalCycleDuration(cycle_time); //cycle time is only for 1 step!
 strideparam.resize(horizon_size);
@@ -74,10 +115,10 @@ feetValuesX[RF] = 0.3;
 feetValuesX[LH] = -0.3;
 feetValuesX[RH] = -0.3;
 //init y all the same
-feetValuesY[LF] = 0.2;
-feetValuesY[RF] = -0.2;
-feetValuesY[LH] = 0.2;
-feetValuesY[RH] = -0.2;
+feetValuesY[LF] = 0.3;
+feetValuesY[RF] = -0.3;
+feetValuesY[LH] = 0.3;
+feetValuesY[RH] = -0.3;
 
 
 for (int leg=LF;leg<=RH;leg++){
@@ -116,24 +157,26 @@ for (int i = 0; i < horizon_size; i++)
         {
             if (gait_swing_status[leg])
             {
-                //compute step as length covered in 1/4th of cycle at userSpeed
-                //scaling to the dutyfactor (since thee is a stance phase for the feet to catch up with com they should step longer)
-                double scaling = 1/duty_factor;
-                feetValuesX[leg] += scaling*cycle_time*userSpeed(0);
-                feetValuesY[leg] += scaling*cycle_time*userSpeed(1);
-
+                feetValuesX[leg] += cycle_time*duty_factor*userSpeed(0);
+                feetValuesY[leg] += cycle_time*duty_factor*userSpeed(1);
             }
         }
         detected_switch = false;
     }
 
     double num_stance_legs = compute_stance_legs(!gait_swing_status);
-
-    grForcesZ[LF](i)=    robotMass*rbd::g /num_stance_legs;
-    grForcesZ[RF](i)=    robotMass*rbd::g /num_stance_legs;
-    grForcesZ[LH](i)=    robotMass*rbd::g /num_stance_legs;
-    grForcesZ[RH](i)=    robotMass*rbd::g /num_stance_legs;
-
+    if (num_stance_legs!= 0)
+    {
+        grForcesZ[LF](i)= !gait_swing_status[LF]* robotMass*rbd::g /num_stance_legs;
+        grForcesZ[RF](i)= !gait_swing_status[RF]* robotMass*rbd::g /num_stance_legs;
+        grForcesZ[LH](i)= !gait_swing_status[LH]* robotMass*rbd::g /num_stance_legs;
+        grForcesZ[RH](i)= !gait_swing_status[RH]* robotMass*rbd::g /num_stance_legs;
+    } else {
+        grForcesZ[LF](i)= 0.0;
+        grForcesZ[RF](i)= 0.0;
+        grForcesZ[LH](i)= 0.0;
+        grForcesZ[RH](i)= 0.0;
+    }
     //integrate base position
     if (i>0)
     {
