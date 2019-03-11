@@ -66,7 +66,7 @@ if (CATKIN_ENABLE_TESTING)
     add_executable(testPlannerXYconstraintMPC tests/replanning/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
     target_link_libraries(testPlannerXYconstraintMPC   ${catkin_LIBRARIES})
 
-    add_executable(generateFootSteps tests/niraj/generateFootSteps.cpp src/MPCPlanner.cpp)
+    add_executable(generateFootSteps tests/generateGait/generateFootSteps.cpp src/MPCPlanner.cpp)
     target_link_libraries(generateFootSteps   ${catkin_LIBRARIES})
 
     install(DIRECTORY tests/ DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests FILES_MATCHING PATTERN "*.m")
@@ -75,7 +75,7 @@ if (CATKIN_ENABLE_TESTING)
     install(TARGETS testPlannerXYconstraintDecoupled RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/constrainedQP_decoupled/)
     install(TARGETS testPlannerXYconstraintCoupled RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/constrainedQP_coupled/)
     install(TARGETS testPlannerXYconstraintMPC RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/replanning/)
-    install(TARGETS generateFootSteps RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/niraj/)
+    install(TARGETS generateFootSteps RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/generateGait/)
 
 endif()
 

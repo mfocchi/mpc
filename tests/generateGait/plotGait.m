@@ -6,8 +6,9 @@ format_input = '%f  %f';
 format_input2 = '%f  %f %f';
 
 
-
-addpath('../../../../../../install/share/crawl_planner/tests/niraj')
+addpath('../')
+loadFigOptions
+addpath('../../../../../../install/share/crawl_planner/tests/generateGait')
     
 [time,   footPos_x(1,:),footPos_y(1,:)] = textread('footPosLF.txt', format_input2);
 [time,   footPos_x(2,:),footPos_y(2,:)] = textread('footPosRF.txt', format_input2);
