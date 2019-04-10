@@ -662,7 +662,8 @@ void CrawlPlanner::crawlStateMachine(double time)
 	            //compute next base position
 	            Vector3d new_triangle_baryW, new_triangle_baryWoff;
 	            //get coord of bary in world frame
-                bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal, stab_margin, new_triangle_baryW);
+                bodyTargetHandler->setStabilityMargin(stab_margin);
+                bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal,  new_triangle_baryW);
                 //for plotting purposes
 	            BaryTriangleW= gl.actual_base.x + new_triangle_baryW;
 
