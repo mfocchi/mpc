@@ -29,7 +29,7 @@ CrawlPlanner::~CrawlPlanner()
 
 bool CrawlPlanner::init()
 {
-    printf(BLUE "Initialization of the CrawlPlanner\n" COLOR_RESET);
+    printf(BLUE_ "Initialization of the CrawlPlanner\n" COLOR_RESET);
 
     addConsoleFunction("startCrawl",
                        "crawl on with virtual model on",
@@ -62,7 +62,7 @@ bool CrawlPlanner::init()
     // Declaring ROS clients
     internal_stance_clt_ = node_.serviceClient<std_srvs::Empty>("/internal_stance_service");
 
-    printf(BLUE "Initialization of the CrawlPlanner accomplished\n" COLOR_RESET);
+    printf(BLUE_ "Initialization of the CrawlPlanner accomplished\n" COLOR_RESET);
 
     return true;
 }
