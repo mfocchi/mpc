@@ -6,6 +6,9 @@
  */
 #include <crawl_planner/MPCPlanner.h>
 #include <crawl_planner/FootScheduler.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 
 using namespace std;
@@ -962,7 +965,9 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool
 
 
     std::ofstream file;
-    file.open(finename.c_str());
+    std::string path;
+    path = ( std::string(getenv("HOME"))+"/"+ finename);
+    file.open(path.c_str());
 
     for (int i=0; i<var.size();i++)
     {
@@ -972,7 +977,7 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool
         time+=Ts;
     }
     if (verbose)
-        printf("done saving\n");
+        printf("done saving  in %s\n", path.c_str());
     file.close();
 
 }
@@ -980,9 +985,12 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool
 void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, const VectorXd & var_y, bool verbose)
 {
     double time = 0.0;
-
     std::ofstream file;
-    file.open(finename.c_str());
+    std::string path;
+    path = ( std::string(getenv("HOME"))+"/"+ finename);
+    file.open(path.c_str());
+
+
 
     for (int i=0; i<var_x.size();i++)
     {
@@ -993,7 +1001,7 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, co
         time+=Ts;
     }
     if (verbose)
-        printf("done saving x and y vars\n");
+        printf("done saving x and y vars in %s\n", path.c_str());
     file.close();
 }
 

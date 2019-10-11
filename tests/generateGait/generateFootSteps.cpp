@@ -46,6 +46,8 @@ userSpeed(1)=0.0;
 newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
 
+newline::getDouble("Samping Time Ts:", Ts, Ts);
+
 initialBasePos << 0.0,0.0;
 
 newline::getDouble("initial Base position X:", initialBasePos(0), initialBasePos(0));
