@@ -38,6 +38,7 @@ int main()
 {
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
+newline::getDouble("Samping Time Ts:", Ts, Ts);
 MPCPlanner myPlanner(horizon_size,    Ts,    9.81);
 newline::getDouble("cycle time:", cycle_time, cycle_time);
 
@@ -46,7 +47,7 @@ userSpeed(1)=0.0;
 newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
 
-newline::getDouble("Samping Time Ts:", Ts, Ts);
+
 
 initialBasePos << 0.0,0.0;
 
