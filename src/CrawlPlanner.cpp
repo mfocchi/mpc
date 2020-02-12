@@ -274,7 +274,7 @@ void CrawlPlanner::run(double time,
             //do the replan
             replanningStage++;
             std::cout<<"----------------------------------------------------------------------"<<std::endl;
-            prt(replanningStage)
+            //prt(replanningStage)
 
 
                     //set initial state for optimization to actual state (there might have been disturbances)
@@ -313,7 +313,7 @@ void CrawlPlanner::run(double time,
                 mySchedule->next();
             } else {
                 firstTime = false;
-                prt("first time dont update actual state and initial feet they arelady have been initialized")
+                //prt("first time dont update actual state and initial feet they arelady have been initialized")
             }
 
 
@@ -365,7 +365,7 @@ void CrawlPlanner::run(double time,
                 myPlanner->solveQPConstraintCoupled(gl.actual_CoM_height,actual_state_x, actual_state_y , A,b,userSpeed,jerk_x,jerk_y,replanningWindow);
              }
 
-            //prt(initial_feet_y)
+            ////prt(initial_feet_y)
             //save it
             //for the log compute the whole traj
             myPlanner->computeCOMtrajectory( actual_state_x, jerk_x, des_com_x);
@@ -736,22 +736,22 @@ void CrawlPlanner::crawlStateMachine(double time)
 	            Vector3d new_triangle_baryW, new_triangle_baryWoff;
 	            //get coord of bary in world frame
                 bodyTargetHandler->computeBaryNextTriangle(gl.R, swing_leg_index, gl.footPos, gl.terr_normal, stab_margin, new_triangle_baryW);
-	            prt(gl.terr_normal)
-	            prt(gl.R)
-	            prt(gl.footPos)
-	            prt(new_triangle_baryW)
+	            //prt(gl.terr_normal)
+	            //prt(gl.R)
+	            //prt(gl.footPos)
+	            //prt(new_triangle_baryW)
 	            //for plotting purposes
 	            BaryTriangleW= gl.actual_base.x + new_triangle_baryW;
 	            gl.dummy_var1 = gl.actual_base.x +bodyTargetHandler->getDummyVar();
 	            gl.dummy_var2 = gl.actual_base.x +new_triangle_baryW;
 
 	            //alternative  WAY (TODO)
-	            //prt(new_triangle_baryW)
+	            ////prt(new_triangle_baryW)
 	            ////the step must be parallel to the terrain
 	            //Eigen::Vector3d comToBaryW = new_triangle_baryW - gl.Rt*gl.offCoM; //get the offset of the com in world frame
 	            ////add the des_height! comToBaryW is a point on the polygon
 	            //comToBaryW += gl.terr_normal*gl.des_height;
-	            //prt(comToBaryW)
+	            ////prt(comToBaryW)
 
 	            //subtract the offset (in world frame) of the com wrt to the base
 	            new_triangle_baryW -= gl.Rt*gl.offCoM; //get the offset of the com in world frame
@@ -812,7 +812,7 @@ void CrawlPlanner::crawlStateMachine(double time)
 	        if (swingTimer.resetFlag)
 	        {
 	            std::cout <<"swing leg"<<std::endl;
-	            //prt(swing_leg_index)
+	            ////prt(swing_leg_index)
 	            //sample actual position to apply the spline from
 	            sample_footPosDes = gl.footPosDes; //otherwise since you have the PD in the static case you can have discontinuities
 	            double step_x = 0.0;double step_y = 0.0;    
@@ -838,7 +838,7 @@ void CrawlPlanner::crawlStateMachine(double time)
         if (Terrain_Estimation)
         {
             gl.vec_incl[swing_leg_index] = commons::rpyToRot(Vector3d(gl.terrRoll, gl.terrPitch, gl.yaw)).transpose()*Vector3d(0,0,1);
-            //prt(vec_incl[swing_leg_index]transpose())
+            ////prt(vec_incl[swing_leg_index]transpose())
         }
 
     }
@@ -954,7 +954,7 @@ bool  CrawlPlanner::update_swing_position(dog::LegID swing_leg_index, double tim
     }
 
     if (stop_condition){
-        //prt("swingstoped")
+        ////prt("swingstoped")
         swingTimer.resetTimer();
         return true;
     } else{
@@ -998,7 +998,7 @@ void CrawlPlanner::start_crawl(void)
         gl.frame_change = true;
         //start state machine
         state_machine = move_base_to_next_support_triangle;
-        //prt(mySchedule->getCurrentSwing())
+        ////prt(mySchedule->getCurrentSwing())
         std::cout<<"Crawl started"<<std::endl;
 
         bs->setPosition_W(actual_ws_->getBasePosition());
