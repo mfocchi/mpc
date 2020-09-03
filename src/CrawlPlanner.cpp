@@ -95,7 +95,7 @@ void CrawlPlanner::starting(double time) {
     tau_max_ = robot_limits_->getTorqueLimits(q_);
 
     //init gl
-    gl.init(q_, qd_,feet_jacs_,fwd_kin_, qdd_); //this sets also 	footPosDes = footPos;
+    gl.init(q_, qd_,feet_jacs_,fwd_kin_); //this sets also 	footPosDes = footPos;
     gl.update_states(q_, qd_, tau_, tau_max_,qdd_, *bs);
     //this is needed to compute qdd_ via numeric differentiation
     gl.setServoRate(planning_rate_);
