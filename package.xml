@@ -32,6 +32,6 @@
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <dls_planner plugin="${prefix}/planner_plugin.xml"/>
+    <dls_planner plugin="${prefix}/crawl_planner_plugin.xml"/>
   </export>
 </package>

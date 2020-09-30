@@ -6,6 +6,9 @@
  */
 #include <crawl_planner/MPCPlanner.h>
 #include <crawl_planner/FootScheduler.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 
 using namespace std;
@@ -33,8 +36,10 @@ MPCPlanner::MPCPlanner(const double horizon_size, const double Ts, const double 
      this->Ts  = Ts;
      this->gravity_  = gravity;
 //default weights
-     weight_R = 1e-06;
-     weight_Q = 1.0;
+     weight_R = 1e-06; //used for jerk
+     weight_Q = 1.0; //used for velocity and zmp ref
+     weight_Qa = 1e-06;
+     weight_Qs = 100.0; //used for slacks
      height_ = 0.5;
 
 
@@ -56,6 +61,7 @@ MPCPlanner::MPCPlanner(const double horizon_size, const double Ts, const double 
 //    loadGains(filename);
 //
 //    initial_state_.resize();
+    slacks.resize(0);
 
     legmap[iit::dog::LF] = "LF";
     legmap[iit::dog::RF] = "RF";
@@ -85,9 +91,10 @@ void MPCPlanner::setHorizonSize(int horizon_size_)
     this->Xax.resize(horizon_size_, 3);
 }
 
-void MPCPlanner::setWeights(double weight_R, double weight_Q){
+void MPCPlanner::setWeights(double weight_R, double weight_Q, double weight_Qs){
     this->weight_R = weight_R;
     this->weight_Q = weight_Q;
+    this->weight_Qs = weight_Qs;
 
 }
 
@@ -316,10 +323,10 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
 //    //GQ shoud be positive definite
 //    GQ.setIdentity();
 //    GQ.block(0,0, horizon_size_,horizon_size_)*=weight_R; //jerk part
-//    GQ.block(horizon_size_,horizon_size_, horizon_size_,horizon_size_)*=weight_Q; //slack part
+//    GQ.block(horizon_size_,horizon_size_, horizon_size_,horizon_size_)*=weight_Qs; //slack part
 
 //    //the lienar part comes from slacks   ones(1000)^T*Q*w
-//    g0.segment(horizon_size_,horizon_size_).setConstant(1000*weight_Q);
+//    g0.segment(horizon_size_,horizon_size_).setConstant(1000*weight_Qs);
 //    //no equality constraints
 //    CE.resize(0,0);ce0.resize(0);
 
@@ -343,12 +350,16 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
 
     //2- new using 1 slack for each constraints
     //we have both jerk (N) and slack vars (2N)
-    GQ.resize(3*horizon_size_,3*horizon_size_);
-    g0.resize(3*horizon_size_,1);g0.setZero();
-    CI.resize(4*horizon_size_,3*horizon_size_); CI.setZero();//max /min for all horizon
-    ci0.resize(4*horizon_size_);
+    int number_of_slacks = 2*horizon_size_;
+    slacks.resize(number_of_slacks);
+    GQ.resize(horizon_size_+number_of_slacks,horizon_size_+number_of_slacks);
+    g0.resize(horizon_size_+number_of_slacks,1);g0.setZero();
+    CI.resize(2*horizon_size_+number_of_slacks,horizon_size_+number_of_slacks);
+    CI.setZero();//max /min for all horizon
+    ci0.resize(2*horizon_size_+number_of_slacks);
+    ci0.setZero();
     jerk_vector.resize(horizon_size_);
-    solution.resize(3*horizon_size_); //jerk in \R^N w in R^{2N}
+    solution.resize(horizon_size_+number_of_slacks); //jerk in \R^N w in R^{2N}
     //update with height
     Cz << 1 , 0  , -height_/gravity_;
     buildMatrix(Cz,Zx,Zu);
@@ -356,10 +367,10 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     //GQ shoud be positive definite
     GQ.setIdentity();
     GQ.block(0,0, horizon_size_,horizon_size_)*=weight_R; //jerk part
-    GQ.block(horizon_size_,horizon_size_, 2*horizon_size_,2*horizon_size_)*=weight_Q; //slack part
+    GQ.block(horizon_size_,horizon_size_,number_of_slacks,number_of_slacks)*=weight_Qs; //slack part
 
     //the lienar part comes from slacks   ones(1000)^T*Q*w
-    g0.segment(horizon_size_,2*horizon_size_).setConstant(1000*weight_Q);
+    g0.segment(horizon_size_,number_of_slacks).setConstant(1000*weight_Qs);
     //no equality constraints
     CE.resize(0,0);ce0.resize(0);
 
@@ -369,17 +380,18 @@ void MPCPlanner::solveQPconstraintSlack(const double actual_height, const Vector
     //first N min constraint -- zmp  >= min => zmp - min + w > 0  => Z_x x0 + Zu *xddd - min + w>0 =>   Zu *xddd + (Z_x*x0  - min) + w  >0
     // [Zu | Inxn] *[xddd/w]  + (Z_x*x0  - min) >0
     CI.block(0, 0, horizon_size_,horizon_size_) = Zu;
-    CI.block(0, horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
     ci0.segment(0,horizon_size_) = Zx*initial_state - zmpLim.min;
+
     //N max constraint -- zmp  <= max => -zmp > -max => -zmp + max + w>0 => -Z_x x0 - Zu *xddd +max + w>0 => - Zu *xddd  + (max -Z_x x0)  +w >0
     //[-Zu | Inxn] *[xddd/w]   + (max -Z_x x0)    >0
     CI.block(horizon_size_, 0, horizon_size_,horizon_size_) = -Zu;
-    CI.block(horizon_size_, 2*horizon_size_, horizon_size_,horizon_size_) = MatrixXd::Identity(horizon_size_,horizon_size_);
     ci0.segment(horizon_size_,horizon_size_) = zmpLim.max-Zx*initial_state;
 
+    //slack part of the inequalities
+    CI.block(0, horizon_size_, number_of_slacks,number_of_slacks) = MatrixXd::Identity(number_of_slacks,number_of_slacks);
     //inequality (1*N) w<=0 => -w>0
-    CI.block(2*horizon_size_, horizon_size_, 2*horizon_size_,2*horizon_size_)= -MatrixXd::Identity(2*horizon_size_,2*horizon_size_);
-    ci0.segment(2*horizon_size_,2*horizon_size_).setZero();
+    CI.block(2*horizon_size_, horizon_size_, number_of_slacks,number_of_slacks)= -MatrixXd::Identity(number_of_slacks,number_of_slacks);
+    ci0.segment(2*horizon_size_,number_of_slacks).setZero();
 
 //
 //    prt(GQ)
@@ -559,16 +571,13 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
     gv.segment(horizon_size_,horizon_size_) = by.transpose()*weightQv*Xvu*selectionMatrix;
     //prt(gv.transpose())
 
-    //add accel term
+    //add accel term (the weight is the same as R)
     //add the velocity term (set a constraint only on the last value of velocity
     buildMatrix(Ca,Xax,Xau);
-    MatrixXd weightQa, Ga;
-    weightQa.resize(horizon_size_,horizon_size_);
-    weightQa.setIdentity();
-    weightQa  *= weight_R;
+    MatrixXd  Ga;
     Ga.resize(2*horizon_size_,2*horizon_size_);Ga.setZero();
-    Ga.block(0,0,horizon_size_,horizon_size_) = Xau.transpose()*weightQa*Xau;
-    Ga.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Xau.transpose()*weightQa*Xau;
+    Ga.block(0,0,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+    Ga.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
 
 ////////////
 
@@ -619,6 +628,335 @@ void MPCPlanner::solveQPConstraintCoupled(const double actual_height,
 }
 
 
+//2 D - using polygon constraints with velocity optimization, set R for jerk and Q for velocity, and Qref for zmp ref
+void MPCPlanner::solveQPConstraintCoupledRef(const double actual_height,
+                                          const Eigen::Vector3d & initial_state_x,
+                                          const Eigen::Vector3d & initial_state_y,
+                                          const VectorXd & zmp_ref_x,
+                                          const VectorXd & zmp_ref_y,
+                                          const  MatrixXd & A,  const  VectorXd & b,
+                                          const Eigen::Vector2d &targetSpeed,
+                                          Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y, int replanningWindow)
+{
+
+
+    this->height_ = actual_height;
+    Eigen::MatrixXd GQ, CI, CE, Zuc, Zxc, Zyc; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0, solution;
+    //build matrix
+    GQ.resize(2*horizon_size_,2*horizon_size_);
+    g0.resize(2*horizon_size_,1);
+    solution.resize(2*horizon_size_);
+
+    CI.resize(b.size(),2*horizon_size_); //max /min for all horizon
+    ci0.resize(b.size());
+
+    jerk_vector_x.resize(horizon_size_);
+    jerk_vector_y.resize(horizon_size_);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+
+    //Finds x that minimizes xddd^T * Q * xddd where xddd = [xddd_x, xddd_y]
+    g0.setZero();
+
+    //add the jerk term
+    Eigen::MatrixXd Gjerk;
+    Gjerk.resize(2*horizon_size_,2*horizon_size_);
+    Gjerk.setIdentity();
+    Gjerk*=weight_R;
+
+
+    //add the velocity term (set a constraint only on the last value of velocity
+    int window = horizon_size_;//horizon_size_ //is the window where you enforce the velocity is good to set the whole horizon otherwise you have discontinuities
+    buildMatrix(Cv,Xvx,Xvu);
+    MatrixXd weightQv, Gv;
+    weightQv.resize(horizon_size_,horizon_size_);
+    if (replanningWindow ==1000)
+    {
+        //this tries to achieve the desired speed at the end of the horizon
+        //prt("usig constant  weighting")
+        weightQv.setIdentity();
+        weightQv  *= weight_Q*horizon_size_/window;//scale the importance with window size to make trhe costs comparable
+    } else{
+        //this tries to achieve the desired speed at the end of the replanning window
+        //prt("usig importance weighting")
+        //importance weight, make gaussian wise most important the weights at the end of the replanning window
+        weightQv = makeGaussian(horizon_size_, replanningWindow, replanningWindow).asDiagonal();
+        weightQv  *= weight_Q*horizon_size_; //to use the same weights cause the gaussian  integral is 1 and not horizon_size (e.g. as it would be as we have all ones)
+    }
+
+    VectorXd selectionVector;
+    MatrixXd selectionMatrix;
+    selectionVector.resize(horizon_size_);
+    selectionVector.setZero();
+    selectionVector.segment(horizon_size_-window, window) = VectorXd::Ones(window);
+    selectionMatrix.resize(horizon_size_,horizon_size_);
+    selectionMatrix = selectionVector.asDiagonal();
+    Gv.resize(2*horizon_size_,2*horizon_size_);Gv.setZero();
+    //to select from a matrix I need to left and right multiply for the selection matrix
+    Gv.block(0,0,horizon_size_,horizon_size_) = selectionMatrix* Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    Gv.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = selectionMatrix * Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    //prt(Gv)
+
+    Eigen::VectorXd bx, by, desiredSpeedVector,gv;
+    desiredSpeedVector.resize(horizon_size_);
+    bx.resize(horizon_size_);
+    by.resize(horizon_size_);
+    bx = Xvx*initial_state_x - desiredSpeedVector.setConstant(targetSpeed(rbd::X));
+    by = Xvx*initial_state_y - desiredSpeedVector.setConstant(targetSpeed(rbd::Y));
+    gv.resize(2*horizon_size_,1);gv.setZero();
+    //to select from a row vector I need to right multiply for the selection matrix
+    gv.segment(0,horizon_size_) = bx.transpose()*weightQv*Xvu*selectionMatrix;
+    gv.segment(horizon_size_,horizon_size_) = by.transpose()*weightQv*Xvu*selectionMatrix;
+    //prt(gv.transpose())
+
+    //add accel term (the weight is the same as R)
+    //add the velocity term (set a constraint only on the last value of velocity
+    buildMatrix(Ca,Xax,Xau);
+    MatrixXd  Ga;
+    Ga.resize(2*horizon_size_,2*horizon_size_);Ga.setZero();
+    Ga.block(0,0,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+    Ga.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+
+    //reference zmp cost
+    MatrixXd  Gref;
+    Eigen::VectorXd gref;
+    Gref.resize(2*horizon_size_,2*horizon_size_);Gref.setZero();
+    //Zuc is block diagonal
+    Gref.block(0,0, horizon_size_, horizon_size_) = Zu.transpose()*weight_Qs*Zu;
+    Gref.block(horizon_size_,horizon_size_, horizon_size_, horizon_size_) = Zu.transpose()*weight_Qs*Zu;
+    gref.resize(2*horizon_size_,1);gref.setZero();
+    bx = Zx*initial_state_x - zmp_ref_x;
+    by = Zx*initial_state_y - zmp_ref_y;
+    //to select from a row vector I need to right multiply for the selection matrix
+    gref.segment(0,horizon_size_) = bx.transpose()*weight_Qs*Zu;
+    gref.segment(horizon_size_,horizon_size_) = by.transpose()*weight_Qs*Zu;
+////////////
+
+
+    GQ = Gjerk + Gv + Gref;// + Ga; //Ga does not make difference
+    g0 = gv + gref; //gjerk ga are zero cause we want to just miniminze their norm
+
+    ///////////////////////////////////////////////////
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //inequalities
+    //Zuc is block diagonal
+    Zuc.resize(2*horizon_size_,2*horizon_size_); Zuc.setZero();
+    Zuc.block(0,0,horizon_size_,horizon_size_) = Zu;
+    Zuc.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Zu;
+
+//    //Zxc, Zyc are columns
+    Zxc.resize(2*horizon_size_,3);Zxc.setZero();
+    Zxc.block(0,0,horizon_size_,3) = Zx;
+    Zyc.resize(2*horizon_size_,3);Zyc.setZero();
+    Zyc.block(horizon_size_,0,horizon_size_,3) = Zx;
+//
+
+    CI = A*Zuc;
+    ci0 = b + A*(Zxc*initial_state_x + Zyc*initial_state_y);
+
+
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+    else {
+        //prt(solution.transpose())
+        jerk_vector_x = solution.segment(0,horizon_size_);
+        jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
+    }
+    //costs
+    if (debug_mode)
+    {
+        std::cout<<"jerk cost Cj: "<<0.5*solution.transpose()*Gjerk*solution <<std::endl;
+        std::cout<<"acc cost Ca: "<<0.5*solution.transpose()*Ga*solution <<std::endl ;
+        std::cout<<"vel cost Cv: "<<0.5*solution.transpose()*Gv*solution + gv.transpose()*solution<<std::endl;
+    }
+    //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
+
+    all_violations_ =CI*solution + ci0;
+    //prt((CI*solution + ci0).transpose())
+
+}
+
+
+//2 D - using polygon constraints with velocity optimization, set R for jerk and Q for velocity, with slacks for zmp robustness (e.g. stay away from the polygon)
+void MPCPlanner::solveQPConstraintCoupledSlacks(const double actual_height,
+                                          const Eigen::Vector3d & initial_state_x,
+                                          const Eigen::Vector3d & initial_state_y,
+                                          const  MatrixXd & A,  const  VectorXd & b,
+                                          const Eigen::Vector2d &targetSpeed,
+                                          Eigen::VectorXd & jerk_vector_x,
+                                          Eigen::VectorXd & jerk_vector_y,
+                                          int replanningWindow)
+{
+
+
+    this->height_ = actual_height;
+    int number_of_poly_constraints = b.size();
+    Eigen::MatrixXd GQ, CI, CE, Zuc, Zxc, Zyc; //A is used for computing wrencherror
+    Eigen::VectorXd g0, ce0, ci0, solution;
+    //build matrix
+    //state is jexk X, Y and a number of slack equal to the constraints
+    GQ.resize(2*horizon_size_+number_of_poly_constraints,2*horizon_size_+number_of_poly_constraints); GQ.setZero();
+    g0.resize(2*horizon_size_+number_of_poly_constraints,1); g0.setZero();
+
+    //with slacks
+    CI.resize(2*number_of_poly_constraints,2*horizon_size_+number_of_poly_constraints);CI.setZero(); //max /min for all horizon
+    ci0.resize(2*number_of_poly_constraints);    ci0.setZero();
+    //outputs
+    solution.resize(2*horizon_size_+number_of_poly_constraints);
+    jerk_vector_x.resize(horizon_size_);
+    jerk_vector_y.resize(horizon_size_);
+        slacks.resize(number_of_poly_constraints);
+    //update with height
+    Cz << 1 , 0  , -height_/gravity_;
+    buildMatrix(Cz,Zx,Zu);
+
+
+    //Finds x that minimizes xddd^T * Q * xddd where xddd + (-1000 - w)^T Qs(-1000 - w) = [xddd_x, xddd_y, w]
+    //1 - add the jerk term
+    Eigen::MatrixXd Gjerk;
+    Gjerk.resize(2*horizon_size_,2*horizon_size_);
+    Gjerk.setIdentity();
+    Gjerk*=weight_R;
+
+    //2 - add the velocity term (set a constraint only on the last value of velocity
+    int window = horizon_size_;//horizon_size_ //is the window where you enforce the velocity is good to set the whole horizon otherwise you have discontinuities
+    buildMatrix(Cv,Xvx,Xvu);
+    MatrixXd weightQv, Gv;
+    weightQv.resize(horizon_size_,horizon_size_);
+    if (replanningWindow ==1000)
+    {
+        //this tries to achieve the desired speed at the end of the horizon
+        //prt("usig constant  weighting")
+        weightQv.setIdentity();
+        weightQv  *= weight_Q*horizon_size_/window;//scale the importance with window size to make trhe costs comparable
+    } else{
+        //this tries to achieve the desired speed at the end of the replanning window
+        //prt("usig importance weighting")
+        //importance weight, make gaussian wise most important the weights at the end of the replanning window
+        weightQv = makeGaussian(horizon_size_, replanningWindow, replanningWindow).asDiagonal();
+        weightQv  *= weight_Q*horizon_size_; //to use the same weights cause the gaussian  integral is 1 and not horizon_size (e.g. as it would be as we have all ones)
+    }
+
+    VectorXd selectionVector;
+    MatrixXd selectionMatrix;
+    selectionVector.resize(horizon_size_);
+    selectionVector.setZero();
+    selectionVector.segment(horizon_size_-window, window) = VectorXd::Ones(window);
+    selectionMatrix.resize(horizon_size_,horizon_size_);
+    selectionMatrix = selectionVector.asDiagonal();
+    Gv.resize(2*horizon_size_,2*horizon_size_);Gv.setZero();
+    //to select from a matrix I need to left and right multiply for the selection matrix
+    Gv.block(0,0,horizon_size_,horizon_size_) = selectionMatrix* Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    Gv.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = selectionMatrix * Xvu.transpose()*weightQv*Xvu *selectionMatrix;
+    //prt(Gv)
+
+    Eigen::VectorXd bx, by, desiredSpeedVector,gv;
+    desiredSpeedVector.resize(horizon_size_);
+    bx.resize(horizon_size_);
+    by.resize(horizon_size_);
+    bx = Xvx*initial_state_x - desiredSpeedVector.setConstant(targetSpeed(rbd::X));
+    by = Xvx*initial_state_y - desiredSpeedVector.setConstant(targetSpeed(rbd::Y));
+    gv.resize(2*horizon_size_,1);gv.setZero();
+    //to select from a row vector I need to right multiply for the selection matrix
+    gv.segment(0,horizon_size_) = bx.transpose()*weightQv*Xvu*selectionMatrix;
+    gv.segment(horizon_size_,horizon_size_) = by.transpose()*weightQv*Xvu*selectionMatrix;
+    //prt(gv.transpose())
+
+    //3 - add accel term
+    //add the velocity term (set a constraint only on the last value of velocity
+    buildMatrix(Ca,Xax,Xau);
+    MatrixXd  Ga;
+    Ga.resize(2*horizon_size_,2*horizon_size_);Ga.setZero();
+    Ga.block(0,0,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+    Ga.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Xau.transpose()*weight_Qa*Xau;
+
+
+////////////
+
+    GQ.block(0,0,2*horizon_size_,2*horizon_size_) = Gjerk+ Gv;// + Ga; //Ga does not make difference
+    g0.segment(0,2*horizon_size_) = gv; //gjerk ga are zero cause we want to just miniminze their norm
+
+    //add slack part to the cost function that starts at 2N,2N
+    //GQ shoud be positive definite
+
+    GQ.block(2*horizon_size_,2*horizon_size_, number_of_poly_constraints,number_of_poly_constraints) = weight_Qs*MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
+    //the linear part comes from slacks   ones(1000)^T*Qs*w
+    g0.segment(2*horizon_size_,number_of_poly_constraints) = MatrixXd::Ones(1,number_of_poly_constraints) *1000*weight_Qs;
+
+    ///////////////////////////////////////////////////
+    //no equality constraints
+    CE.resize(0,0);ce0.resize(0);
+
+    //inequalities
+    //Zuc is block diagonal
+    Zuc.resize(2*horizon_size_,2*horizon_size_); Zuc.setZero();
+    Zuc.block(0,0,horizon_size_,horizon_size_) = Zu;
+    Zuc.block(horizon_size_,horizon_size_,horizon_size_,horizon_size_) = Zu;
+
+//    //Zxc, Zyc are columns
+    Zxc.resize(2*horizon_size_,3);Zxc.setZero();
+    Zxc.block(0,0,horizon_size_,3) = Zx;
+    Zyc.resize(2*horizon_size_,3);Zyc.setZero();
+    Zyc.block(horizon_size_,0,horizon_size_,3) = Zx;
+
+    CI.block(0,0, number_of_poly_constraints, 2*horizon_size_) = A*Zuc;
+    ci0.segment(0,number_of_poly_constraints) = b + A*(Zxc*initial_state_x + Zyc*initial_state_y);
+
+    //ad slack part to the inequalities
+    //A*x+b + w >=0 / w<0 for robustness
+    //robustness
+    CI.block(0, 2*horizon_size_, number_of_poly_constraints, number_of_poly_constraints) = MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
+    //negativity of slacks
+    CI.block(number_of_poly_constraints, 2*horizon_size_, number_of_poly_constraints, number_of_poly_constraints) = -MatrixXd::Identity(number_of_poly_constraints,number_of_poly_constraints);
+
+
+    double result = Eigen::solve_quadprog(GQ, g0, CE.transpose(), ce0, CI.transpose(), ci0, solution);
+    if(result == std::numeric_limits<double>::infinity())
+        {cout<<"couldn't find a feasible solution"<<endl;}
+    else {
+        //prt(solution.transpose())
+        slacks = solution.segment(2*horizon_size_,number_of_poly_constraints);
+        std::cout<<"Slacks: " << slacks.transpose() << std::endl;//slacks
+        jerk_vector_x = solution.segment(0,horizon_size_);
+        jerk_vector_y = solution.segment(horizon_size_,horizon_size_);
+    }
+    //costs
+    if (debug_mode)
+    {
+
+        //std::cout<<"number of ineq constraints: "<< number_of_poly_constraints<<std::endl;
+        //std::cout<<"GQ"<<std::endl;
+        //std::cout<<GQ<<std::endl;
+        //std::cout<<"g0.transpose"<<std::endl;
+        //std::cout<<g0<<std::endl;
+        //std::cout<<"CI"<<std::endl;
+        //std::cout<<CI<<std::endl;
+        //std::cout<<"ci0.transpose"<<std::endl;
+        //std::cout<<ci0.transpose()<<std::endl;
+        //std::cout<<"ci0.transpose"<<std::endl;
+
+        VectorXd jerkVectors = solution.segment(0, 2*horizon_size_);
+        std::cout<<"jerk cost Cj: "<<0.5*jerkVectors.transpose()*Gjerk*jerkVectors <<std::endl;
+        std::cout<<"acc cost Ca: "<<0.5*jerkVectors.transpose()*Ga*jerkVectors <<std::endl ;
+        std::cout<<"vel cost Cv: "<<0.5*jerkVectors.transpose()*Gv*jerkVectors + gv.transpose()*jerkVectors<<std::endl;
+        std::cout<<"slack cost: "<<0.5*(-MatrixXd::Ones(number_of_poly_constraints, 1) - slacks).transpose()*
+                                       weight_Qs*
+                                        (-MatrixXd::Ones(number_of_poly_constraints, 1) - slacks)<<std::endl;
+    }
+    //compute violation is a vector of size number_of_constraints, if I evaulate the column for each time sample I can get an idea of which constraint is getting close to zero
+
+    all_violations_ =CI.block(0,0,number_of_poly_constraints,2*horizon_size_) * solution.segment(0, 2*horizon_size_) + ci0.segment(0, number_of_poly_constraints);
+    //prt((CI*solution + ci0).transpose())
+
+}
+
+
 
 
 void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool verbose)
@@ -627,7 +965,9 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool
 
 
     std::ofstream file;
-    file.open(finename.c_str());
+    std::string path;
+    path = ( std::string(getenv("HOME"))+"/"+ finename);
+    file.open(path.c_str());
 
     for (int i=0; i<var.size();i++)
     {
@@ -637,7 +977,7 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool
         time+=Ts;
     }
     if (verbose)
-        printf("done saving\n");
+        printf("done saving  in %s\n", path.c_str());
     file.close();
 
 }
@@ -645,9 +985,12 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var, bool
 void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, const VectorXd & var_y, bool verbose)
 {
     double time = 0.0;
-
     std::ofstream file;
-    file.open(finename.c_str());
+    std::string path;
+    path = ( std::string(getenv("HOME"))+"/"+ finename);
+    file.open(path.c_str());
+
+
 
     for (int i=0; i<var_x.size();i++)
     {
@@ -658,7 +1001,7 @@ void MPCPlanner::saveTraj(const std::string finename, const VectorXd & var_x, co
         time+=Ts;
     }
     if (verbose)
-        printf("done saving x and y vars\n");
+        printf("done saving x and y vars in %s\n", path.c_str());
     file.close();
 }
 
@@ -738,6 +1081,54 @@ void  MPCPlanner::buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetS
 
 }
 
+void   MPCPlanner::getSlacks(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & min_slacks, Eigen::VectorXd & avg_slacks)
+{
+    avg_slacks.resize(horizon_size_);
+    min_slacks.resize(horizon_size_);
+    int number_of_constraints = 0;
+     for (int i =0; i<horizon_size_;i++)
+     {
+         //count numner of edges
+         int number_of_edges = 0;
+         for (int leg =0; leg<4; leg++)
+         {
+             if (!feetStates[leg].swing(i))
+                  number_of_edges++;
+         }
+
+         number_of_constraints +=number_of_edges;
+         avg_slacks(i) = slacks.segment(number_of_constraints, number_of_edges).mean();
+         min_slacks(i) = slacks.segment(number_of_constraints, number_of_edges).maxCoeff();
+     }
+
+}
+
+void   MPCPlanner::computeCentroid(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & centroidX, Eigen::VectorXd & centroidY)
+{
+    centroidX.resize(horizon_size_);
+    centroidY.resize(horizon_size_);
+
+     for (int i =0; i<horizon_size_;i++)
+     {
+         //count numner of edges
+         int number_of_stances = 0;
+         double sumfeetX = 0.0;
+         double sumfeetY = 0.0;
+
+         for (int leg =0; leg<4; leg++)
+         {
+             if (!feetStates[leg].swing(i))
+             {
+                 sumfeetX+=feetStates[leg].x(i);
+                 sumfeetY+=feetStates[leg].y(i);
+                 number_of_stances++;
+             }
+         }
+         centroidX(i) = sumfeetX/number_of_stances;
+         centroidY(i) = sumfeetY/number_of_stances;
+     }
+}
+
 Eigen::VectorXd   MPCPlanner::getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates)
 {
     Eigen::VectorXd constraint_violation_;
@@ -815,12 +1206,14 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     //init stuff
     number_of_constraints = 0;
     start_phase_index = 0;
-    phase_duration = step_knots/2; //10 samples both swing and phase
-    A.resize((4+4)*phase_duration*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
-    b.resize((4+4)*phase_duration*number_of_steps);
+    phase_duration = floor(step_knots/2); //10 samples both swing and phase NB this can be not a integer so you need to floor
+    A.resize(4*step_knots*number_of_steps, horizon_size*2); //assumes all stance phases then we resize
+    b.resize(4*step_knots*number_of_steps);
     A.setZero();
     b.setZero();
-
+    if(debug_mode){
+       std::cout<<"phase duration "<<phase_duration<<std::endl;
+    }
 
     for (int leg=0;leg<4;leg++){
         feetStates[leg].resize(horizon_size);
@@ -910,8 +1303,11 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
         start_phase_index += phase_duration;
         schedule.next(); //update the step in the schedule
     }
+
+
     //compute missing knots last phase is double stance
     int missing_knots = horizon_size - start_phase_index;
+
     //end with 4 stance
     feetStates[LF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[LF]);
     feetStates[RF].x.segment(start_phase_index, missing_knots).setConstant(feetValuesX[RF]);
@@ -923,9 +1319,12 @@ void MPCPlanner::computeSteps(const Vector2d & userSpeed,  const LegDataMap<doub
     feetStates[RH].y.segment(start_phase_index, missing_knots).setConstant(feetValuesY[RH]);
 
     myPlanner.buildPolygonMatrix(feetStates, start_phase_index,missing_knots,horizon_size, A,  b,  number_of_constraints);
+
     //cause you have 3 stances phases and you need to shrink
     A.conservativeResize(number_of_constraints,horizon_size*2);
+
     b.conservativeResize(number_of_constraints);
+
     //prt(missing_knots)
 }
 

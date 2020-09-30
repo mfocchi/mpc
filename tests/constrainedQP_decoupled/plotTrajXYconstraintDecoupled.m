@@ -1,6 +1,10 @@
 close all
 clear all
 format = '%f  %f'
+
+addpath('../../../../../../install/share/crawl_planner/tests/constrainedQP_decoupled')
+addpath('../')
+
 [time,min_x] = textread('min_x.txt', format);
 [time,min_y] = textread('min_y.txt', format);
 [time,max_x] = textread('max_x.txt', format);

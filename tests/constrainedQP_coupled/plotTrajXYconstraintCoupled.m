@@ -5,7 +5,9 @@ format short g
 format_input = '%f  %f';
 format_input2 = '%f  %f %f';
 
-    
+addpath('../../../../../../install/share/crawl_planner/tests/constrainedQP_coupled')
+addpath('../')
+
 [time,   footPos_x(1,:),footPos_y(1,:)] = textread('footPosLF.txt', format_input2);
 [time,   footPos_x(2,:),footPos_y(2,:)] = textread('footPosRF.txt', format_input2);
 [time,   footPos_x(3,:),footPos_y(3,:)] = textread('footPosLH.txt', format_input2);
@@ -27,6 +29,10 @@ swing=[];
 [time,jerk_y] =  textread('jerk_y.txt', format_input);
 
 [time,viol] = textread('viol.txt', format_input);
+[time,avg_slacks] = textread('avg_slacks.txt', format_input);
+[time,min_slacks] = textread('min_slacks.txt', format_input);
+[time,centroidX] = textread('centroidX.txt', format_input);
+[time,centroidY] = textread('centroidY.txt', format_input);
 
 
 [step,footHoldsLF(:,1), footHoldsLF(:,2)] = textread('footHoldsLF.txt', format_input2);
@@ -35,7 +41,7 @@ swing=[];
 [step,footHoldsRH(:,1), footHoldsRH(:,2)] = textread('footHoldsRH.txt', format_input2);
 
 %%
-addpath('../')
+
 
 %%
 %STATIC PLOT
@@ -104,8 +110,9 @@ close all
 VIDEO = false
 if VIDEO
     %video
-    aviobj = avifile('video.avi');%default mpeg
+    aviobj = VideoWriter('video.avi');%default mpeg
     aviobj.Quality = 100;    % Default 75
+    open(aviobj);
 end
 
 simfig = figure;
@@ -131,13 +138,16 @@ for i=1:length(time)
     subplot(3,1,1)
     h = plotPolygon(stance_vec);   
     hold on
-    h(length(h)+1) = plot(zmp_x(i), zmp_y(i),'.r','MarkerSize',30);
-    h(length(h)+2) = plot(com_x(i), com_y(i),'.k','MarkerSize',30);
-    legend([h(length(h)+1) h(length(h)+2)], 'zmp', 'com','location', 'West')
+    h(length(h)+3) = plot(centroidX(i), centroidY(i),'.m','MarkerSize',60);
+    h(length(h)+2) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);    
+    h(length(h)+1) = plot(com_x(i), com_y(i),'.g','MarkerSize',30);
+
+    
+    legend([h(length(h)+1) h(length(h)+2) h(length(h)+3)], 'zmp', 'com','centroid','location', 'West')
     xlim([-1 ,2])
     ylim([-1.1 ,2.0])
     
-    
+
     
     subplot(3,1,2)
     plot(time(i), viol(i),'.b','MarkerSize',20); hold on; grid on;
@@ -145,23 +155,31 @@ for i=1:length(time)
     ylim([0,1])
     ylabel('constr.viol')
     
-    subplot(3,1,3)
-    plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
-    plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
-    plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
-    plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
-    xlim([0, time(end)])
-    ylim([0,1.1])
-    ylabel('swing leg')
+%        subplot(3,1,3)
+%     plot(time(i), avg_slacks(i),'.r','MarkerSize',20); hold on; grid on;
+%       plot(time(i), min_slacks(i),'.b','MarkerSize',20); hold on; grid on;
+%     xlim([0, time(end)])
+%     legend('avg slack','min slack')
+%     ylabel('slacks')
     
-    legend('LF','RF','LH','RH')
-    pause(0.001+ 1/time)
+     subplot(3,1,3)
+     plot(time(i), swing(1,i),'.b','MarkerSize',20); hold on;grid on;
+     plot(time(i), swing(2,i),'.r','MarkerSize',20); hold on;grid on;
+     plot(time(i), swing(3,i),'.k','MarkerSize',20); hold on;grid on;
+     plot(time(i), swing(4,i),'.m','MarkerSize',20); hold on;grid on;
+     xlim([0, time(end)])
+     ylim([0,1.1])
+     ylabel('swing leg')
+     legend('LF','RF','LH','RH')
+     
+     
+    pause(0.01+ 1/time)
     drawnow
     
     if VIDEO
         set (gcf,'Units','Normalized','outerposition',[0 0 1 1]); %do full screen window
         frame = getframe(gcf);
-        aviobj = addframe(aviobj,frame);
+        writeVideo(aviobj,frame);
     end
     delete(h); %this deletes the handle
 
@@ -175,7 +193,7 @@ end
 %close(simfig)
 
 
-
-figure
-[x,y]= gaussianVector(10,5,2)
-plot(x,y)
+%to show importance weighting
+% figure
+% [x,y]= gaussianVector(10,5,2)
+% plot(x,y)

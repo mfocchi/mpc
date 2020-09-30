@@ -30,6 +30,7 @@ double lateral_bound = 0.2;
 double Ts = 0.1;
 double weight_R = 1; //jerk
 double weight_Q = 1; //not used
+double weight_Qs = 1; //slacks
 int start_phase_index;
 int phase_duration;
 int useSlacks = false;
@@ -129,8 +130,8 @@ if (!useSlacks)
 } else {
     //to add robustness use slacks! will keep the zmp in the middle of the limits
     weight_R = 1e-06; //jerk
-    weight_Q = 1; //slacks should be higher than R!
-    myPlanner.setWeights(weight_R, weight_Q);
+    weight_Qs = 1; //slacks should be higher than R!
+    myPlanner.setWeights(weight_R, weight_Q, weight_Qs);
     myPlanner.solveQPconstraintSlack(height, initial_state_x , zmpLimX,jerk_x);
     myPlanner.solveQPconstraintSlack(height, initial_state_y , zmpLimY,jerk_y);
 }

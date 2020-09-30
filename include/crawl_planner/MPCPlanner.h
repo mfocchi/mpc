@@ -46,7 +46,7 @@ class MPCPlanner
         MPCPlanner(const double horizon_size, const double Ts, const double gravity);
         ~MPCPlanner();
 
-        void setWeights(double weight_R, double weight_Q);
+        void setWeights(double weight_R, double weight_Q, double weight_Qs = 1);
         void debug();
 
         void saveTraj(const std::string finename, const Eigen::VectorXd & var, bool verbose = true);
@@ -81,9 +81,35 @@ class MPCPlanner
         void solveQPConstraintCoupled(const double actual_height, const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
                                       const  Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,  Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y);
 
-        void solveQPConstraintCoupled(const double actual_height, const Eigen::Vector3d & initial_state_x, const Eigen::Vector3d & initial_state_y,
+        void solveQPConstraintCoupled(const double actual_height,
+                                      const Eigen::Vector3d & initial_state_x,
+                                      const Eigen::Vector3d & initial_state_y,
                                       const  Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,
-                                      const Eigen::Vector2d &targetSpeed, Eigen::VectorXd & jerk_vector_x, Eigen::VectorXd & jerk_vector_y, int replanningWindow = 1000);
+                                      const Eigen::Vector2d &targetSpeed,
+                                      Eigen::VectorXd & jerk_vector_x,
+                                      Eigen::VectorXd & jerk_vector_y,
+                                      int replanningWindow = 1000);
+
+        void solveQPConstraintCoupledRef(const double actual_height,
+                                                  const Eigen::Vector3d & initial_state_x,
+                                                  const Eigen::Vector3d & initial_state_y,
+                                                  const Eigen::VectorXd & zmp_ref_x,
+                                                  const Eigen::VectorXd & zmp_ref_y,
+                                                  const Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,
+                                                  const Eigen::Vector2d &targetSpeed,
+                                                  Eigen::VectorXd & jerk_vector_x,
+                                                  Eigen::VectorXd & jerk_vector_y,
+                                                  int replanningWindow = 1000);
+
+        //this function doe not work, is deprecated, I leave it here cause the implementation can be useful in the future
+        void solveQPConstraintCoupledSlacks(const double actual_height,
+                                                  const Eigen::Vector3d & initial_state_x,
+                                                  const Eigen::Vector3d & initial_state_y,
+                                                  const  Eigen::MatrixXd & A,  const  Eigen::VectorXd & b,
+                                                  const Eigen::Vector2d &targetSpeed,
+                                                  Eigen::VectorXd & jerk_vector_x,
+                                                  Eigen::VectorXd & jerk_vector_y,
+                                            int replanningWindow = 1000);
 
 
         void  buildPolygonMatrix(const iit::dog::LegDataMap<footState> feetStates, const int start_phase_index,
@@ -92,6 +118,8 @@ class MPCPlanner
         void setHorizonSize(int horizon);
         Eigen::VectorXd makeGaussian(const int length, const int mean, const int stddev);
         Eigen::VectorXd  getConstraintViolation(const iit::dog::LegDataMap<footState> feetStates);
+        void  getSlacks(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & min_slacks, Eigen::VectorXd & avg_slacks);
+        void  computeCentroid(const iit::dog::LegDataMap<footState> feetStates,Eigen::VectorXd & centroidX, Eigen::VectorXd & centroidY);
 
         void computeSteps(const iit::dog::LegDataMap<double> & initial_feet_x,
                           const iit::dog::LegDataMap<double> & initial_feet_y,
@@ -150,8 +178,9 @@ class MPCPlanner
         int horizon_size_;
         Eigen::VectorXd initial_state_;
         Eigen::VectorXd all_violations_;
+        Eigen::VectorXd slacks;
 
-        double weight_R, weight_Q;
+        double weight_R, weight_Q, weight_Qa, weight_Qs;
         Eigen::Matrix<double,3,3> A;
         Eigen::Matrix<double,3,1> B;
         Eigen::Matrix<double,1,3> Cz;

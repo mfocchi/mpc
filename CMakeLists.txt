@@ -39,26 +39,46 @@ install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   )
 
+install(FILES crawl_planner_plugin.xml
+DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+
+install(DIRECTORY config/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+  PATTERN ".svn" EXCLUDE)
+
 install(DIRECTORY include/${PROJECT_NAME}/
         DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
 
-add_executable(testPlanner tests/unconstrainedQP/testPlanner.cpp src/MPCPlanner.cpp)
-target_link_libraries(testPlanner   ${catkin_LIBRARIES})
-set_target_properties(testPlanner PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/unconstrainedQP")
 
-add_executable(testPlannerXY tests/unconstrainedQP_XY/testPlannerXY.cpp src/MPCPlanner.cpp)
-target_link_libraries(testPlannerXY   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXY PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/unconstrainedQP_XY")
+if (CATKIN_ENABLE_TESTING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -o3")
 
-add_executable(testPlannerXYconstraintDecoupled tests/constrainedQP_decoupled/testPlannerXYconstraintDecoupled.cpp src/MPCPlanner.cpp)
-target_link_libraries(testPlannerXYconstraintDecoupled   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXYconstraintDecoupled PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/constrainedQP_decoupled")
+    add_executable(testPlanner tests/unconstrainedQP/testPlanner.cpp src/MPCPlanner.cpp)
+    target_link_libraries(testPlanner   ${catkin_LIBRARIES})
 
-add_executable(testPlannerXYconstraintCoupled tests/constrainedQP_coupled/testPlannerXYconstraintCoupled.cpp src/MPCPlanner.cpp)
-target_link_libraries(testPlannerXYconstraintCoupled   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXYconstraintCoupled PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/constrainedQP_coupled")
+    add_executable(testPlannerXY tests/unconstrainedQP_XY/testPlannerXY.cpp src/MPCPlanner.cpp)
+    target_link_libraries(testPlannerXY   ${catkin_LIBRARIES})
+
+    add_executable(testPlannerXYconstraintDecoupled tests/constrainedQP_decoupled/testPlannerXYconstraintDecoupled.cpp src/MPCPlanner.cpp)
+    target_link_libraries(testPlannerXYconstraintDecoupled   ${catkin_LIBRARIES})
+
+    add_executable(testPlannerXYconstraintCoupled tests/constrainedQP_coupled/testPlannerXYconstraintCoupled.cpp src/MPCPlanner.cpp)
+    target_link_libraries(testPlannerXYconstraintCoupled   ${catkin_LIBRARIES})
 
 
-add_executable(testPlannerXYconstraintMPC tests/replanning/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
-target_link_libraries(testPlannerXYconstraintMPC   ${catkin_LIBRARIES})
-set_target_properties(testPlannerXYconstraintMPC PROPERTIES COMPILE_FLAGS "-std=c++0x -o3" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/replanning")
+    add_executable(testPlannerXYconstraintMPC tests/replanning/testPlannerXYconstraintMPC.cpp src/MPCPlanner.cpp)
+    target_link_libraries(testPlannerXYconstraintMPC   ${catkin_LIBRARIES})
+
+    add_executable(generateFootSteps tests/generateGait/generateFootSteps.cpp src/MPCPlanner.cpp)
+    target_link_libraries(generateFootSteps   ${catkin_LIBRARIES})
+
+    install(DIRECTORY tests/ DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests FILES_MATCHING PATTERN "*.m")
+    install(TARGETS testPlanner RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/unconstrainedQP/)
+    install(TARGETS testPlannerXY RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/unconstrainedQP_XY/)
+    install(TARGETS testPlannerXYconstraintDecoupled RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/constrainedQP_decoupled/)
+    install(TARGETS testPlannerXYconstraintCoupled RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/constrainedQP_coupled/)
+    install(TARGETS testPlannerXYconstraintMPC RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/replanning/)
+    install(TARGETS generateFootSteps RUNTIME DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tests/generateGait/)
+
+endif()
+
