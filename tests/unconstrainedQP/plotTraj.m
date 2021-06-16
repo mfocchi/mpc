@@ -1,14 +1,17 @@
 close all
 clear all
+
+addpath('~')
+addpath('../')
+run('../loadFigOptions.m')
+
 format = '%f  %f'
 [time,zmpRefx] = textread('zmpRef.txt', format);
 [time,zmp] =  textread('zmp.txt', format);
 [time,jerk] = textread('jerk.txt', format);
 [time,com] = textread('com.txt', format);
 
-addpath('../../../../../../install/share/crawl_planner/tests/unconstrainedQP')
-addpath('../')
-run('../loadFigOptions.m')
+
 
 %NB trajectory starts from the second value
 ha(1)=axes('position',[xgraph three_y1 three_w three_h]);

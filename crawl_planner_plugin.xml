@@ -1,9 +1,0 @@
-<library path="libcrawl_planner">
-	<class name="dls_planner/CrawlPlanner"
-			type="dls_planner::CrawlPlanner" 
-			base_class_type="dls_planner::PlannerBase">
-		<description>
-			Crawl Planner plugin
-		</description>
-	</class>
-</library>

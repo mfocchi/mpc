@@ -8,7 +8,7 @@
 
 
 #include <crawl_planner/MPCPlanner.h>
-#include <dls_controller/support/ConsoleUtility.h>
+#include <crawl_planner/ConsoleUtility.h>
 #include <crawl_controller/FootScheduler.h>
 
 using namespace Eigen;

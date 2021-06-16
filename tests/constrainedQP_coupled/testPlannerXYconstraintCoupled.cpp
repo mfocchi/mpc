@@ -7,7 +7,7 @@
 
 
 #include <crawl_planner/MPCPlanner.h>
-#include <dls_controller/support/ConsoleUtility.h>
+#include <crawl_planner/ConsoleUtility.h>
 #include <stdlib.h>
 #include <crawl_planner/FootScheduler.h> //TODO fix this
 
@@ -45,28 +45,24 @@ VectorXd zmp_x, zmp_y, com_x, com_y, viol, avg_slacks, min_slacks;
 MatrixXd A; VectorXd b;
 
 int optimizeVelocityFlag = true;
-int zmpRef = false;
-double disturbance = 0.0;
-
+int optim_type  = 0;
 VectorXd com_xd, com_yd;
 Vector2d userSpeed;
 VectorXd centroidX,centroidY;
-
 userSpeed(0)=0.15;
 userSpeed(1)=0.0;
-
 
 //get user input
 newline::getInt("horizon_size:", horizon_size, horizon_size);
 newline::getInt("number_of_steps:", number_of_steps, number_of_steps);
-newline::getInt("use zmpRef?[0/1]:", zmpRef, zmpRef);
+
+newline::getInt("use zmpRef[0] / use single slack[1] / use multiple slack?[2]:", optim_type, optim_type);
 
 //newline::getDouble("initial state pos:", initial_state_x(0), initial_state_x(0));
 //newline::getDouble("initial state vel:", initial_state_x(1), initial_state_x(1));
 //newline::getDouble("initial state acc:", initial_state_x(2), initial_state_x(2));
+//newline::getInt("optimize velocity? [0/1]:", optimizeVelocityFlag, optimizeVelocityFlag);
 
-newline::getInt("optimize velocity? [0/1]:", optimizeVelocityFlag, optimizeVelocityFlag);
-newline::getDouble("disturbance:", disturbance, disturbance);
 newline::getDouble("userSpeedX:", userSpeed(0), userSpeed(0));
 newline::getDouble("userSpeedY:", userSpeed(1), userSpeed(1));
 
@@ -97,29 +93,31 @@ initial_feet_y[RH] = initial_state_y(0) -1.0;
 myPlanner.computeSteps(userSpeed, initial_feet_x, initial_feet_y, number_of_steps, horizon_size, feetStates, footHolds, A, b, myPlanner,iit::dog::LF);
 myPlanner.computeCentroid(feetStates, centroidX, centroidY);
 
-if (!optimizeVelocityFlag){
-        myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, jerk_x,jerk_y);
-}else {
-
-    if (zmpRef){
+switch(optim_type)
+{
+    case 0: //zmp ref
         weight_R = 0.01; //jerk
         newline::getDouble("weight R(jerk):", weight_R, weight_R);
         newline::getDouble("weight Q (velocity):", weight_Q, weight_Q);
         newline::getDouble("weight Qs(zmpref):", weight_Qs, weight_Qs);
         myPlanner.setWeights(weight_R, weight_Q, weight_Qs);
+        //this sets a reference of the ZMP to the centroid with weight Qs
         myPlanner.solveQPConstraintCoupledRef(height,initial_state_x, initial_state_y , centroidX, centroidY, A,b,userSpeed, jerk_x,jerk_y);
-        //to add robustness use slacks! will keep the zmp in the middle of the polygons DOES NOT WORK!
-        //myPlanner.solveQPConstraintCoupledSlacks(height,initial_state_x, initial_state_y , A,b,userSpeed, jerk_x,jerk_y);
-
-    } else{
-        weight_R = 0.01; //gives good results
-        newline::getDouble("weight R (jerk):", weight_R, weight_R);
-        newline::getDouble("weight Q (velocity):", weight_Q, weight_Q);
-        myPlanner.setWeights(weight_R, weight_Q);
-        //velocity is enforced at the end of the horizon
-        myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, userSpeed, jerk_x,jerk_y);
-    }
+        break;
+    case 1: //single slack
+        std::cout<<"Not implemented yet!" <<std::endl;
+        break;
+    case 2: //multiple slacks     //to add robustness use slacks! will keep the zmp in the middle of the polygons DOES NOT WORK!
+        myPlanner.solveQPConstraintCoupledSlacks(height,initial_state_x, initial_state_y , A,b,userSpeed, jerk_x,jerk_y);
+        break;
+    default:
+        break;
 }
+
+//this if you do not want to optimize velocity reference
+//myPlanner.solveQPConstraintCoupled(height,initial_state_x, initial_state_y , A,b, jerk_x,jerk_y);
+
+
 viol = myPlanner.getConstraintViolation(feetStates);
 //DOES NOT WORK!
 //myPlanner.getSlacks(feetStates, min_slacks, avg_slacks);

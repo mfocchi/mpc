@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>crawl_planner</name>
+  <name>mpc</name>
   <version>0.0.1</version>
-  <description>The crawl_planner package implements a simple static walking behavior
+  <description>The mpc package implements a simple static walking behavior
     robot </description>
 
 
@@ -10,24 +10,8 @@
   <license>TODO</license>
 
   <buildtool_depend>catkin</buildtool_depend>
+  <depend>readline</depend>
 
-
-    <depend>dls_planner</depend>
-
-
-    <depend>dls_map_interface</depend>
-
-    <depend>readline</depend>
-
-    <depend>terrain_estimator</depend>
-    <depend>locomotion_utils</depend>
-
-  <depend>roscpp</depend>
-  <depend>terrain_server</depend>
-  <depend>dwl</depend>
-  <depend>dwl_rviz_plugin</depend>
-  <depend>dwl_msgs</depend>
-  <depend>pluginlib</depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

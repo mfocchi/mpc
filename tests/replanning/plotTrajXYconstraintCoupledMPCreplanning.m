@@ -5,7 +5,7 @@ format short g
 format_input = '%f  %f ';
 format_input2 = '%f  %f %f';
 
-addpath('../../../../../../install/share/crawl_planner/tests/replanning')
+addpath('~')
 addpath('../')
 
 [horizon_size, number_of_steps, experiment_duration] = textread('./replan_data/exp_data', format_input2);

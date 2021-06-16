@@ -26,9 +26,9 @@ function  h = plotPolygon(stance_vec)
                 grid on 
                 hold on
                 h(i,:) = arrow3(edge_start{i},edge{i},'k'  ); %tail at stance_vec1 magnitude  stance_vec2(i,:)-stance_vec1(i,:)
-                xlabel('X')
-                ylabel('Y')
-                h(i+1) = plot(edge_start{i}(1),stance_vec{1}(2), '.b', 'MarkerSize',40)
+                xlabel('X');
+                ylabel('Y');
+                h(i+1) = plot(edge_start{i}(1),stance_vec{1}(2), '.b', 'MarkerSize',40);
 
                 %axis equal
         end   

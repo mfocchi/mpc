@@ -5,7 +5,7 @@ format short g
 format_input = '%f  %f';
 format_input2 = '%f  %f %f';
 
-addpath('../../../../../../install/share/crawl_planner/tests/constrainedQP_coupled')
+addpath('~')
 addpath('../')
 
 [time,   footPos_x(1,:),footPos_y(1,:)] = textread('footPosLF.txt', format_input2);
@@ -29,8 +29,8 @@ swing=[];
 [time,jerk_y] =  textread('jerk_y.txt', format_input);
 
 [time,viol] = textread('viol.txt', format_input);
-[time,avg_slacks] = textread('avg_slacks.txt', format_input);
-[time,min_slacks] = textread('min_slacks.txt', format_input);
+% [time,avg_slacks] = textread('avg_slacks.txt', format_input);
+% [time,min_slacks] = textread('min_slacks.txt', format_input);
 [time,centroidX] = textread('centroidX.txt', format_input);
 [time,centroidY] = textread('centroidY.txt', format_input);
 
@@ -137,13 +137,14 @@ for i=1:length(time)
     
     subplot(3,1,1)
     h = plotPolygon(stance_vec);   
-    hold on
+    hold on;
     h(length(h)+3) = plot(centroidX(i), centroidY(i),'.m','MarkerSize',60);
-    h(length(h)+2) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);    
+    h(length(h)+2) = plot(zmp_x(i), zmp_y(i),'.k','MarkerSize',40);
     h(length(h)+1) = plot(com_x(i), com_y(i),'.g','MarkerSize',30);
+      
 
-    
-    legend([h(length(h)+1) h(length(h)+2) h(length(h)+3)], 'zmp', 'com','centroid','location', 'West')
+     
+    legend([h(length(h)+1) h(length(h)+2) h(length(h)+3)], 'com', 'zmp','centroid','location', 'West')
     xlim([-1 ,2])
     ylim([-1.1 ,2.0])
     
@@ -173,7 +174,7 @@ for i=1:length(time)
      legend('LF','RF','LH','RH')
      
      
-    pause(0.01+ 1/time)
+    pause(0.001)
     drawnow
     
     if VIDEO

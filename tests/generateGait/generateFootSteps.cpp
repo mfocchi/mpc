@@ -1,9 +1,9 @@
 
 
 #include <crawl_planner/MPCPlanner.h>
-#include <dls_controller/support/ConsoleUtility.h>
+#include <crawl_planner/ConsoleUtility.h>
 #include <stdlib.h>
-#include <crawl_controller/GaitSequencer.h>
+#include <crawl_planner/GaitSequencer.h>
 
 using namespace Eigen;
 using namespace std;
@@ -14,8 +14,9 @@ using namespace iit::dog;
 
 GaitSequencer myGaitSchedule;
 double stridePhase;
-iit::dog::LegBoolMap swingingFlag = false; //stores the time of the steps
-iit::dog::LegBoolMap gait_swing_status = false;
+iit::dog::LegDataMap<bool> swingingFlag = false; //stores the time of the steps
+iit::dog::LegDataMap<bool> gait_swing_status = false;
+iit::dog::LegDataMap<bool> stance_legs = true;
 bool detected_switch = false;
 double duty_factor = 0.85;
 //init params
@@ -33,6 +34,16 @@ LegDataMap<VectorXd> grForcesZ;
 Vector2d initialBasePos;
 VectorXd basePosition_x,basePosition_y, baseVelocity_x,baseVelocity_y ;
 VectorXd strideparam;
+
+int compute_stance_legs(const iit::dog::LegDataMap<bool> & stance_legs)
+{
+          int cleg_count = 0;
+          for (int i = 0; i<iit::dog::_LEGS_COUNT; i++){
+                  if (stance_legs[iit::dog::LegID(i)])
+                          cleg_count++;
+          }
+          return cleg_count;
+}
 
 int main()
 {
@@ -167,7 +178,11 @@ for (int i = 0; i < horizon_size; i++)
         detected_switch = false;
     }
 
-    double num_stance_legs = compute_stance_legs(!gait_swing_status);
+    for (int leg=LF; leg<=RH;leg++)
+    {
+        stance_legs[leg]= ! gait_swing_status[leg];
+    }
+    double num_stance_legs = compute_stance_legs(stance_legs);
     if (num_stance_legs!= 0)
     {
         grForcesZ[LF](i)= !gait_swing_status[LF]* robotMass*rbd::g /num_stance_legs;

@@ -1,8 +1,7 @@
 close all
 clear all
 format = '%f  %f'
-
-addpath('../../../../../../install/share/crawl_planner/tests/constrainedQP_decoupled')
+addpath('~')
 addpath('../')
 
 [time,min_x] = textread('min_x.txt', format);
