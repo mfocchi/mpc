@@ -14,9 +14,10 @@
 #include <Eigen/Dense>
 
 #include <crawl_planner/eiquadprog.hpp>
-#include <iit/commons/dog/leg_data_map.h>
-#include <iit/commons/planning/planning.h> //this is for linecoeffd
-#include <iit/rbd/rbd.h>
+#include <crawl_planner/planning.h> //this is for linecoeffd
+#include <crawl_planner/rbd.h>
+#include <crawl_planner/leg_data_map.h>
+#include <crawl_planner/leg_bool_map.h>
 
 
 
